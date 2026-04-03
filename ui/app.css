@@ -309,10 +309,20 @@ a {
 .sidebar ul li a:hover  { background: var(--pico-primary-focus); }
 .sidebar ul li a.active  { background: var(--pico-primary-background);
                            color: var(--pico-primary-inverse); font-weight: 600; }
-.sidebar ul li a.unsaved { border-left: 3px solid var(--pico-mark-background-color); }
-.unsaved-dot { color: var(--pico-mark-background-color); font-weight: bold; margin-left: auto; }
+.sidebar ul li a.unsaved { border-left: 3px solid var(--pico-primary); }
+.unsaved-dot { color: var(--pico-primary); font-weight: bold; margin-left: auto; }
 .sidebar ul li a.empty-table { opacity: 0.4; }
 .sidebar ul li a.empty-table:hover { opacity: 0.7; }
+
+.sidebar details summary.cat-unsaved {
+  color: var(--pico-primary);
+}
+
+.cat-unsaved-dot {
+  color: var(--pico-primary);
+  font-weight: bold;
+  margin-left: 0.3rem;
+}
 
 .sidebar ul li a .table-desc {
   display: block;
@@ -538,6 +548,19 @@ a {
 }
 
 .table-actions { display: flex; gap: 0.5rem; flex-shrink: 1; flex-wrap: wrap; align-items: center; min-width: 0; }
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  flex-shrink: 0;
+}
+
+.table-footer .row-info {
+  font-size: var(--fs-sm);
+  color: var(--pico-muted-color);
+}
 
 /* ── Badges ────────────────────────────────────────────────────────── */
 

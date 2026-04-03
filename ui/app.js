@@ -497,6 +497,12 @@ function proxui() {
       return m ? m.module : null;
     },
 
+    categoryHasUnsaved(catName) {
+      const cat = this.categories.find(c => c.name === catName);
+      if (!cat) return false;
+      return cat.tables.some(t => this.isUnsaved(t));
+    },
+
     isEmptyTable(name) {
       return +(this.tableCounts[name] ?? -1) === 0;
     },

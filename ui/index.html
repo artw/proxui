@@ -174,7 +174,10 @@
         <aside class="sidebar" :style="'width:' + sidebarWidth + 'px'" x-show="!sidebarCollapsed">
           <template x-for="cat in filteredCategories" :key="cat.name">
             <details :id="'cat-' + cat.name">
-              <summary x-text="cat.label + ' (' + cat.tables.length + ')'"></summary>
+              <summary :class="{'cat-unsaved': categoryHasUnsaved(cat.name)}">
+                <span x-text="cat.label + ' (' + cat.tables.length + ')'"></span>
+                <span class="cat-unsaved-dot" x-show="categoryHasUnsaved(cat.name)">•</span>
+              </summary>
               <ul>
                 <template x-for="t in cat.tables" :key="t">
                   <li>
@@ -212,18 +215,12 @@
                   <p>
                     <span x-show="tableMeta?.readonly" class="badge readonly">read-only</span>
                     <span x-show="!tableMeta?.readonly" class="badge writable">writable</span>
-                    <span x-text="sortedRows.length + (sortedRows.length !== filteredRows.length ? '/' + filteredRows.length : '') + (filteredRows.length !== rows.length ? ' (of ' + rows.length + ')' : '') + ' rows'"></span>
 
                   </p>
                   <p class="table-desc-line" x-show="tableDesc(currentTable)"
                      x-text="tableDesc(currentTable)"></p>
                 </hgroup>
                 <div class="table-actions">
-                  <div class="page-sizes">
-                    <template x-for="n in [10,25,50,100,0]" :key="n">
-                      <button :class="{'selected': rowLimit === n}" @click="rowLimit = n" x-text="n === 0 ? 'All' : n"></button>
-                    </template>
-                  </div>
                   <button class="outline" @click="loadRows()" :aria-busy="loading"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>
                   <button x-show="!tableMeta?.readonly" class="outline" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
                   <template x-if="moduleForTable(currentTable)">
@@ -304,6 +301,15 @@
                     </template>
                   </tbody>
                 </table>
+              </div>
+
+              <div class="table-footer" x-show="!loading && rows.length > 0">
+                <span class="row-info" x-text="sortedRows.length + (sortedRows.length !== filteredRows.length ? '/' + filteredRows.length : '') + (filteredRows.length !== rows.length ? ' of ' + rows.length : '') + ' rows'"></span>
+                <div class="page-sizes">
+                  <template x-for="n in [10,25,50,100,0]" :key="n">
+                    <button :class="{'selected': rowLimit === n}" @click="rowLimit = n" x-text="n === 0 ? 'All' : n"></button>
+                  </template>
+                </div>
               </div>
 
               <p x-show="!loading && rows.length === 0 && !error" class="empty-state">No rows found.</p>
