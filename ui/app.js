@@ -122,6 +122,7 @@ function proxui() {
 
     // Overview
     overview: null,
+    tableCounts: {},
 
     // Config sync
     configModules: [],
@@ -267,6 +268,14 @@ function proxui() {
       } catch (e) {
         console.error('Failed to load table metadata:', e);
       }
+
+      // Load table row counts
+      try {
+        const cRes = await fetch(`${API}/table_counts`);
+        this.tableCounts = await cRes.json();
+        this.buildCategories();
+        this.filterTables();
+      } catch (e) {}
 
       // Load query targets
       try {
@@ -436,7 +445,14 @@ function proxui() {
         if (!cats[cat]) cats[cat] = [];
         cats[cat].push(name);
       }
-      for (const c of Object.values(cats)) c.sort();
+      for (const c of Object.values(cats)) {
+        c.sort((a, b) => {
+          const aEmpty = (this.tableCounts[a] ?? -1) === 0;
+          const bEmpty = (this.tableCounts[b] ?? -1) === 0;
+          if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+          return a.localeCompare(b);
+        });
+      }
 
       const order = [
         'mysql', 'mysql_stats',
@@ -479,6 +495,10 @@ function proxui() {
         !m.error && (m.module === tableName || (m.tables && m.tables.includes(tableName)))
       );
       return m ? m.module : null;
+    },
+
+    isEmptyTable(name) {
+      return (this.tableCounts[name] ?? -1) === 0;
     },
 
     isUnsaved(name) {

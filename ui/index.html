@@ -179,7 +179,7 @@
                 <template x-for="t in cat.tables" :key="t">
                   <li>
                     <a href="#" @click.prevent="selectTable(t)"
-                       :class="{'active': t === currentTable, 'unsaved': isUnsaved(t)}">
+                       :class="{'active': t === currentTable, 'unsaved': isUnsaved(t), 'empty-table': isEmptyTable(t)}">
                       <span x-text="displayName(t)"></span>
                       <span x-show="isUnsaved(t)" class="unsaved-dot">•</span>
                       <span class="table-desc" x-text="tableDesc(t)" x-show="tableDesc(t)"></span>

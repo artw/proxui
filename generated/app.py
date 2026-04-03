@@ -184,6 +184,39 @@ async def list_tables(request: Request):
     return {k: v for k, v in TABLE_METADATA.items() if k in live}
 
 
+@app.get("/api/v1/table_counts")
+async def table_counts(request: Request):
+    """Return row counts for all live tables (fast, no data transfer)."""
+    from .db import get_pool
+    pool = await get_pool(request)
+    counts = {}
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SHOW TABLES")
+            tables = [row[0] for row in await cur.fetchall()]
+    for name in tables:
+        try:
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(f"SELECT COUNT(*) FROM {name}")
+                    row = await cur.fetchone()
+                    counts[name] = row[0] if row else 0
+        except Exception:
+            counts[name] = 0
+    # Also check stats tables
+    for name in list(TABLE_METADATA.keys()):
+        if name not in counts and name.startswith("stats_"):
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(f"SELECT COUNT(*) FROM {name}")
+                        row = await cur.fetchone()
+                        counts[name] = row[0] if row else 0
+            except Exception:
+                pass
+    return counts
+
+
 # ── Free-form SQL query endpoint ─────────────────────────────────
 
 class QueryRequest(BaseModel):

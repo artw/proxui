@@ -310,6 +310,8 @@ a {
                            color: var(--pico-primary-inverse); font-weight: 600; }
 .sidebar ul li a.unsaved { border-left: 3px solid var(--pico-mark-background-color); }
 .unsaved-dot { color: var(--pico-mark-background-color); font-weight: bold; margin-left: auto; }
+.sidebar ul li a.empty-table { opacity: 0.4; }
+.sidebar ul li a.empty-table:hover { opacity: 0.7; }
 
 .sidebar ul li a .table-desc {
   display: block;
