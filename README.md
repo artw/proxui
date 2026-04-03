@@ -1,9 +1,9 @@
 # proxui
 
-Web UI and REST API for ProxySQL administration. The data model is
-code-generated from ProxySQL's C header, the UI is a zero-build-step
-SPA (Alpine.js + Pico CSS + CodeMirror + uPlot), and the backend is
-FastAPI connecting to ProxySQL's admin port via MySQL protocol.
+Web UI and REST API for ProxySQL administration. Data model is
+code-generated from ProxySQL's C header. Zero-build-step SPA
+(Alpine.js + Pico CSS + CodeMirror + uPlot). FastAPI backend
+connects via MySQL protocol to ProxySQL's admin port.
 
 ```
 ┌──────────────┐       ┌────────────────┐       ┌────────────────┐
@@ -22,88 +22,126 @@ FastAPI connecting to ProxySQL's admin port via MySQL protocol.
 ## Quick start
 
 ```bash
-make                  # create venv, install deps, generate code from C header
-make test-up          # start MySQL + PostgreSQL + ProxySQL in podman
-make test-run         # build container + run proxui on the same network
-# open http://localhost:8080       → web UI (dashboard)
-# open http://localhost:8080/api/docs → Swagger API docs
+make                  # venv + deps + generate code from C header
+make test-up          # MySQL + PostgreSQL + ProxySQL in podman
+make test-run         # build + run proxui container on same network
+# http://localhost:8080       → web UI (login with radmin/radmin)
+# http://localhost:8080/api/docs → Swagger
 ```
 
-Only the admin connection needs configuration — proxy ports, backend servers,
-and credentials are auto-discovered from ProxySQL's own state at runtime.
+Only the admin connection needs configuration — proxy ports, backend
+servers, and credentials are auto-discovered from ProxySQL state.
 
 ## Features
 
-### Dashboard (`#dashboard`)
-- Live-updating stats charts (uPlot) — connections, QPS, connection pool, memory
-- Config sync status bar — grouped by MySQL / PgSQL / Admin
-- Click a module to see memory↔runtime diff, with Load to Runtime / Save to Disk actions
-- Command counters and top query digests with adjustable row limits (10/25/50/100/All)
-- Background polling (5s interval), persists across tab switches, pause/resume button
+### Authentication
+- Login with ProxySQL admin credentials (any user on the admin port)
+- Server-side sessions — cookie contains HMAC-signed session ID only
+  (no credentials in cookie)
+- Per-session connection pools, cleaned up on logout
+- All `/api/` routes require authentication
+- Audit logging: login, SQL queries, config actions
 
 ### Tables (`#tables/mysql_servers`)
-- Sidebar with categorized tables (MySQL, PgSQL, Config, ProxySQL, Runtime, Stats)
-- Resizable sidebar, fuzzy search filter
-- Sortable data table with per-column filter (funnel icon → floating filter popup)
-- Adjustable row limit (10/25/50/100/All)
-- Full CRUD: create/edit via modal, inline delete with confirmation
-- Password fields blurred by default (click to reveal), `type=password` in forms
-- Human-readable display names and descriptions
+- Categorized sidebar: MySQL, PostgreSQL, ClickHouse, ProxySQL, Stats
+- Runtime tables hidden (their state shown via inline diffs)
+- Empty tables greyed out and sorted to bottom
+- Collapsible sidebar with resize handle
+- Groups with unapplied changes highlighted in blue
 
-### Query (`#query`)
-- CodeMirror 5 SQL editor with syntax highlighting (MySQL/PostgreSQL modes)
-- Tab completion with fuzzy matching against live schema
-- Target selector with brand icons — ProxySQL admin, MySQL proxy, PgSQL proxy, all backends
+**Data table:**
+- Resizable columns (drag header edge, double-click to auto-fit)
+- Column sorting: click cycles ascending → descending → reset
+- Per-column filter (funnel icon → floating filter popup)
+- Row limit selector at bottom (10/25/50/100/All)
+- Inline cell editing (double-click to edit, Enter to save)
+- Strike-through delete with 3-second undo window
+- Password fields blurred by default
+
+**Config sync (Apply / Save / Discard):**
+- Three-layer model: `DISK ↔ MEMORY ↔ RUNTIME`
+- **Apply** — push memory → runtime (`LOAD TO RUNTIME`)
+- **Save** — persist memory → disk (`SAVE TO DISK`)
+- **Discard** — revert memory to runtime (`SAVE FROM RUNTIME`)
+- Buttons solid when action needed, outline+disabled when in sync
+- Inline row diffs: toggle Diff to see memory vs runtime side-by-side
+  with git-style indicators (`+` new, `~` changed, `−` deleted)
+- Bottom bar shows "Unapplied changes" or "Unsaved to disk"
+  with clickable pills to navigate to affected tables
+
+### Dashboard (`#dashboard`)
+- Live stats charts (uPlot): connections, QPS, connection pool, memory
+- Command counters and top query digests (adjustable row limits)
+- Polls every 5s in background, keeps 120-point rolling window (10 min)
+- Pause/resume button in nav bar
+- Charts persist across tab switches
+
+### Query Console (`#query`)
+- CodeMirror 5 SQL editor with syntax highlighting
+- Fuzzy tab completion against live schema
+- Target selector: admin, MySQL proxy, PgSQL proxy, all backends
 - Database selector populated from target
-- Schema tree sidebar — databases → tables → columns, click to insert at cursor
-- Results in sortable table with timing info
+- Schema tree sidebar: databases → tables → columns
+- Sortable results table with row count and timing
 
 ### General
-- Dark/light theme toggle (persisted via Pico CSS `data-theme`)
-- URL hash routing (`#dashboard`, `#tables/mysql_servers`, `#query`) — survives refresh
-- Phosphor Icons (bold weight) throughout
-- MySQL/PostgreSQL brand SVG logos from Simple Icons
-- Zero build tooling — all from CDN + static files
+- Dark/light theme toggle
+- URL hash routing — survives refresh
+- Phosphor Icons (bold) + MySQL/PostgreSQL SVG logos
+- Monospace font throughout
+- Zero build tooling — all CDN + static files
 
 ## Code generation
 
-`gen_fastapi_models.py` parses `ProxySQL_Admin_Tables_Definitions.h` and generates:
+`gen_fastapi_models.py` parses `ProxySQL_Admin_Tables_Definitions.h`:
 
-| File | Contents |
-|------|----------|
+| Generated file | Contents |
+|----------------|----------|
 | `models.py` | Pydantic models (read + create/update per writable table) |
 | `crud_router.py` | FastAPI router (CRUD for config, GET-only for runtime/stats) |
 | `table_metadata.py` | Column metadata dict for UI introspection |
-| `db.py` | aiomysql connection pool |
-| `app.py` | FastAPI app with API endpoints, config sync, query engine, schema browser, static UI mount |
+| `db.py` | aiomysql connection pool with per-session support |
+| `app.py` | FastAPI app: auth, config sync, query engine, schema browser |
 
-Config tables get full CRUD. Runtime/stats tables are read-only.
-Composite PKs become path parameters (e.g. `/mysql_servers/{hg}/{host}/{port}`).
-Tables not present in the running ProxySQL instance are filtered out at runtime.
+Config tables get full CRUD. Runtime/stats are read-only.
+Composite PKs become path params (`/mysql_servers/{hg}/{host}/{port}`).
+Tables not present in the running instance are filtered at runtime.
+
+## Security
+
+- **No credentials in cookies** — server-side session store, cookie
+  contains only HMAC-signed random session ID
+- **No CORS** — UI served same-origin, no cross-origin access
+- **Database name sanitization** — regex whitelist before SQL interpolation
+- **Audit logging** — login, queries (user + target + SQL[:200]),
+  config actions logged at INFO level
+- **Session cleanup** — pool closed and session removed on logout
+- **Sessions invalidated on restart** — secret regenerates unless
+  `PROXUI_SESSION_SECRET` is set
 
 ## Files
 
 ```
 proxui/
 ├── gen_fastapi_models.py       # code generator
-├── Containerfile               # podman image build
-├── Makefile                    # build, run, test targets
-├── requirements.txt            # python deps
+├── Containerfile               # podman image
+├── Makefile                    # build / run / test
+├── requirements.txt
 ├── ui/                         # web UI (hand-crafted)
-│   ├── index.html
-│   ├── app.js
-│   ├── app.css
-│   └── icons/                  # MySQL/PgSQL SVG logos
+│   ├── index.html              # Alpine.js SPA
+│   ├── app.js                  # ~1350 lines
+│   ├── app.css                 # ~870 lines
+│   └── icons/                  # MySQL/PostgreSQL SVG logos
 ├── generated/                  # auto-generated — do not edit
-│   ├── app.py
-│   ├── crud_router.py
-│   ├── db.py
-│   ├── models.py
-│   └── table_metadata.py
+│   ├── app.py                  # FastAPI app (~1000 lines)
+│   ├── crud_router.py          # ~2400 routes
+│   ├── db.py                   # connection pool
+│   ├── models.py               # ~2300 Pydantic models
+│   └── table_metadata.py       # ~2100 table defs
 └── test/
     ├── bench.sh                # podman test bench
     ├── proxysql.cnf
-    └── smoke_test.sh           # 20-point API smoke test
+    └── smoke_test.sh           # 23-point test suite
 ```
 
 ## Makefile targets
@@ -128,10 +166,12 @@ proxui/
 | `HOST` | `127.0.0.1` | Uvicorn bind address |
 | `PORT` | `8080` | Uvicorn bind port |
 | `PROXYSQL_ADMIN_HOST` | `127.0.0.1` | ProxySQL admin host |
-| `PROXYSQL_ADMIN_PORT` | `16032` | ProxySQL admin port |
-| `PROXYSQL_ADMIN_USER` | `radmin` | Admin username (remote-capable) |
-| `PROXYSQL_ADMIN_PASS` | `radmin` | Admin password |
+| `PROXYSQL_ADMIN_PORT` | `6032` | ProxySQL admin port |
+| `PROXUI_SESSION_SECRET` | *(random)* | HMAC key for session cookies |
 | `PROXYSQL_SRC` | `~/src/proxysql` | ProxySQL source tree (for codegen) |
+
+No admin username/password env vars — credentials are provided at
+login and stored server-side per session.
 
 ## Test bench
 
@@ -139,12 +179,27 @@ proxui/
 test/bench.sh up       # MySQL 8.4 + PostgreSQL 17 + ProxySQL 3.0
 test/bench.sh run      # build + run proxui container on same network
 test/bench.sh down     # tear down everything
-test/bench.sh status   # show container status
+test/bench.sh status   # container status
 ```
 
-Seeds ProxySQL with MySQL and PostgreSQL backends, remote admin credentials,
-and a sample PostgreSQL table. Auto-detects distrobox and uses
-`distrobox-host-exec podman`.
+Seeds ProxySQL with MySQL and PostgreSQL backends, remote admin
+credentials (`radmin:radmin`), and a sample PostgreSQL table.
+Auto-detects distrobox and uses `distrobox-host-exec podman`.
+
+## Config layer model
+
+```
+  DISK  ←── Save ───  MEMORY  ─── Apply ──→  RUNTIME
+              │                       ↑
+              │        Discard ───────┘
+              │
+              └── (load_disk: MEMORY ← DISK, available via API)
+```
+
+- **MEMORY** — the config tables you edit in the UI
+- **RUNTIME** — what ProxySQL is actively using right now
+- **DISK** — persisted to SQLite, survives restart
+- Users tables always show diffs (ProxySQL splits/hashes at runtime)
 
 ## Regenerating
 
@@ -153,4 +208,4 @@ cd ~/src/proxysql && git pull
 cd ~/sync/code/proxui && make generate
 ```
 
-Re-reads the header and overwrites `generated/`. Never hand-edit those files.
+Overwrites `generated/`. Never hand-edit those files.
