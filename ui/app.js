@@ -447,8 +447,8 @@ function proxui() {
       }
       for (const c of Object.values(cats)) {
         c.sort((a, b) => {
-          const aEmpty = (this.tableCounts[a] ?? -1) === 0;
-          const bEmpty = (this.tableCounts[b] ?? -1) === 0;
+          const aEmpty = +(this.tableCounts[a] ?? -1) === 0;
+          const bEmpty = +(this.tableCounts[b] ?? -1) === 0;
           if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
           return a.localeCompare(b);
         });
@@ -498,7 +498,7 @@ function proxui() {
     },
 
     isEmptyTable(name) {
-      return (this.tableCounts[name] ?? -1) === 0;
+      return +(this.tableCounts[name] ?? -1) === 0;
     },
 
     isUnsaved(name) {
