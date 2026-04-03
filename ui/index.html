@@ -252,7 +252,8 @@
                 <table class="striped">
                   <thead>
                     <tr>
-                      <th x-show="showDiffs" class="diff-indicator-th"></th>
+                      <th x-show="showDiffs" class="diff-indicator-th"
+                          title="+ new in memory&#10;~ changed vs runtime&#10;− only in runtime"></th>
                       <template x-for="col in columns" :key="col">
                         <th :class="{'sorted': sortCol === col}"
                             :style="colWidths[col] ? 'width:' + colWidths[col] + 'px; min-width:' + colWidths[col] + 'px' : ''">

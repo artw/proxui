@@ -792,8 +792,10 @@ function proxui() {
           }
         }
         this.rowDiffs = diffs;
+        this.showDiffs = Object.keys(diffs).length > 0;
       } catch (e) {
         this.rowDiffs = {};
+        this.showDiffs = false;
       }
     },
 
