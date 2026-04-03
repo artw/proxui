@@ -803,8 +803,12 @@ function proxui() {
     },
 
     sortBy(col) {
-      if (this.sortCol === col) this.sortAsc = !this.sortAsc;
-      else { this.sortCol = col; this.sortAsc = true; }
+      if (this.sortCol === col) {
+        if (this.sortAsc) { this.sortAsc = false; }      // asc → desc
+        else { this.sortCol = ''; this.sortAsc = true; } // desc → reset
+      } else {
+        this.sortCol = col; this.sortAsc = true;          // new col → asc
+      }
     },
 
     get filteredRows() {
@@ -823,8 +827,9 @@ function proxui() {
         const col = this.sortCol, dir = this.sortAsc ? 1 : -1;
         rows = [...rows].sort((a, b) => {
           const va = a[col] ?? '', vb = b[col] ?? '';
-          if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-          return String(va).localeCompare(String(vb)) * dir;
+          const na = Number(va), nb = Number(vb);
+          if (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb)) return (na - nb) * dir;
+          return String(va).localeCompare(String(vb), undefined, { numeric: true }) * dir;
         });
       }
       return this.rowLimit ? rows.slice(0, this.rowLimit) : rows;

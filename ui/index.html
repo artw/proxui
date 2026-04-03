@@ -251,7 +251,11 @@
                         <th :class="{'sorted': sortCol === col}"
                             :style="colWidths[col] ? 'width:' + colWidths[col] + 'px; min-width:' + colWidths[col] + 'px' : ''">
                           <div class="th-inner">
-                            <span @click="sortBy(col)" class="th-label" x-text="col"></span>
+                            <span @click="sortBy(col)" class="th-label">
+                              <span x-text="col"></span>
+                              <i x-show="sortCol === col && sortAsc" class="ph-bold ph-caret-up sort-arrow"></i>
+                              <i x-show="sortCol === col && !sortAsc" class="ph-bold ph-caret-down sort-arrow"></i>
+                            </span>
                             <span class="th-icons">
                               <i class="ph-bold ph-funnel th-funnel"
                                  :class="{'active': colFilters[col]}"
@@ -350,14 +354,14 @@
       <!-- Unsaved changes bottom bar -->
       <div class="config-bottom" x-show="configModules.some(m => !m.in_sync && !m.error)">
         <div class="config-bar">
-          <span class="config-bar-label"><i class="ph-bold ph-warning"></i> Unsaved changes</span>
+          <span class="config-bar-label"><i class="ph-bold ph-warning"></i> Unapplied changes</span>
           <template x-for="g in unsyncedGroups" :key="g.label">
             <div class="config-group">
               <template x-for="m in g.modules" :key="m.module">
                 <button class="config-pill sync-warn"
                         :class="{'selected': currentTable === m.module || moduleForTable(currentTable) === m.module}"
                         @click="selectTable(m.module)">
-                  <span x-text="configShortName(m.module)"></span>
+                  <span x-text="m.module"></span>
                 </button>
               </template>
             </div>
