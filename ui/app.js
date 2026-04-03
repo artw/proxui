@@ -465,10 +465,38 @@ function proxui() {
       }[cat] || cat;
     },
 
+    moduleForTable(tableName) {
+      // Find the config module that covers this table (uses 'tables' from status response)
+      if (!tableName) return null;
+      const m = this.configModules.find(m =>
+        !m.error && (m.module === tableName || (m.tables && m.tables.includes(tableName)))
+      );
+      return m ? m.module : null;
+    },
+
     isUnsaved(name) {
-      // Check if this config table has pending changes (memory != runtime)
-      const m = this.configModules.find(m => m.module === name);
+      // Check if this config module/table has pending changes (memory != runtime)
+      const mod = this.moduleForTable(name) || name;
+      const m = this.configModules.find(m => m.module === mod);
       return m ? !m.memory_eq_runtime : false;
+    },
+
+    get unsyncedGroups() {
+      // Build config groups filtered to only out-of-sync modules
+      const groups = {
+        'MySQL': [], 'PostgreSQL': [], 'ClickHouse': [], 'ProxySQL': [], 'Admin': [],
+      };
+      for (const m of this.configModules) {
+        if (m.in_sync || m.error) continue;
+        if (m.module.startsWith('mysql_')) groups['MySQL'].push(m);
+        else if (m.module.startsWith('pgsql_')) groups['PostgreSQL'].push(m);
+        else if (m.module.startsWith('clickhouse_')) groups['ClickHouse'].push(m);
+        else if (m.module.startsWith('proxysql_')) groups['ProxySQL'].push(m);
+        else groups['Admin'].push(m);
+      }
+      return Object.entries(groups)
+        .filter(([, mods]) => mods.length > 0)
+        .map(([label, modules]) => ({ label, modules }));
     },
 
     _fuzzyMatch(text, query) {

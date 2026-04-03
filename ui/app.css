@@ -437,6 +437,20 @@ a {
   padding: 0.2rem 0.5rem;
 }
 
+.sync-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--pico-muted-border-color);
+}
+
+.sync-warn-btn {
+  border-color: var(--pico-mark-background-color) !important;
+  color: var(--pico-mark-color) !important;
+  background: color-mix(in srgb, var(--pico-mark-background-color) 15%, transparent) !important;
+}
+
 /* Config diff panel */
 .config-diff {
   padding: 0.75rem 1rem;

@@ -523,6 +523,22 @@ CONFIG_MODULES = {
         "save_disk":    "SAVE SCHEDULER TO DISK",
         "load_disk":    "LOAD SCHEDULER FROM DISK",
     },
+    "clickhouse_users": {
+        "memory": ["clickhouse_users"],
+        "runtime": ["runtime_clickhouse_users"],
+        "disk": ["disk.clickhouse_users"],
+        "load_runtime": "LOAD CLICKHOUSE USERS TO RUNTIME",
+        "save_disk":    "SAVE CLICKHOUSE USERS TO DISK",
+        "load_disk":    "LOAD CLICKHOUSE USERS FROM DISK",
+    },
+    "clickhouse_variables": {
+        "memory": ["global_variables"],
+        "runtime": ["runtime_global_variables"],
+        "disk": ["disk.global_variables"],
+        "load_runtime": "LOAD CLICKHOUSE VARIABLES TO RUNTIME",
+        "save_disk":    "SAVE CLICKHOUSE VARIABLES TO DISK",
+        "load_disk":    "LOAD CLICKHOUSE VARIABLES FROM DISK",
+    },
 }
 
 
@@ -545,7 +561,8 @@ async def config_status(request: Request):
     result = []
     for mod_name, mod in CONFIG_MODULES.items():
         entry = {"module": mod_name, "in_sync": True,
-                 "memory_eq_runtime": True, "memory_eq_disk": True}
+                 "memory_eq_runtime": True, "memory_eq_disk": True,
+                 "tables": mod["memory"]}
         try:
             mem_hash = await _hash_rows(pool, mod["memory"][0])
             rt_hash = await _hash_rows(pool, mod["runtime"][0])
@@ -891,6 +908,21 @@ async def list_targets(request: Request):
                     label = f"{host}:{port} (hg{hg})"
                     targets.append({"id": tid, "label": label,
                                     "type": "postgresql"})
+    except Exception:
+        pass
+
+    # ClickHouse proxy interface (port 6090 by default)
+    try:
+        async with pool.acquire() as c:
+            async with c.cursor() as cur:
+                await cur.execute(
+                    "SELECT variable_value FROM global_variables "
+                    "WHERE variable_name='clickhouse-mysql_ifaces'")
+                row = await cur.fetchone()
+                if row and row[0]:
+                    targets.append({"id": "clickhouse_proxy",
+                                    "label": f"ClickHouse ({row[0]})",
+                                    "type": "clickhouse"})
     except Exception:
         pass
 

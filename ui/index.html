@@ -221,6 +221,15 @@
                   </div>
                   <button class="outline" @click="loadRows()" :aria-busy="loading"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>
                   <button x-show="!tableMeta?.readonly" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
+                  <template x-if="moduleForTable(currentTable)">
+                    <div class="sync-actions">
+                      <button class="outline" @click="configAction(moduleForTable(currentTable), 'load_runtime')"
+                              :class="{'sync-warn-btn': isUnsaved(moduleForTable(currentTable))}">
+                        <i class="ph-bold ph-arrow-right"></i> Runtime</button>
+                      <button class="outline secondary" @click="configAction(moduleForTable(currentTable), 'save_disk')">
+                        <i class="ph-bold ph-floppy-disk"></i> Disk</button>
+                    </div>
+                  </template>
                 </div>
               </div>
 
@@ -279,8 +288,8 @@
         </main>
       </div>
 
-      <!-- Config sync bottom bar -->
-      <div class="config-bottom" x-show="configGroups.length > 0">
+      <!-- Config sync bottom bar (only when something is out of sync) -->
+      <div class="config-bottom" x-show="configModules.some(m => !m.in_sync && !m.error)">
         <!-- Diff panel (expands above the bar) -->
         <div class="config-diff" x-show="activeConfigModule && activeConfigDiff">
           <div class="config-diff-header">
@@ -323,21 +332,17 @@
           </div>
         </div>
 
-        <!-- Sync pills -->
+        <!-- Sync pills (out-of-sync only) -->
         <div class="config-bar">
-          <template x-for="g in configGroups" :key="g.label">
+          <template x-for="g in unsyncedGroups" :key="g.label">
             <div class="config-group">
               <span class="config-group-label" x-text="g.label"></span>
               <template x-for="m in g.modules" :key="m.module">
-                <button class="config-pill"
-                        :class="{
-                          'sync-ok': m.in_sync,
-                          'sync-warn': !m.in_sync,
-                          'selected': activeConfigModule === m.module
-                        }"
+                <button class="config-pill sync-warn"
+                        :class="{'selected': activeConfigModule === m.module}"
                         @click="selectConfigModule(m.module)">
                   <span x-text="configShortName(m.module)"></span>
-                  <span x-show="!m.in_sync" class="pill-badge">•</span>
+                  <i class="ph-bold ph-warning"></i>
                 </button>
               </template>
             </div>
