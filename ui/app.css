@@ -706,6 +706,46 @@ a {
   background: color-mix(in srgb, var(--pico-primary) 5%, transparent);
 }
 
+/* Row diffs (memory vs runtime) */
+.diff-row-changed > td {
+  border-left-color: transparent;
+}
+
+.diff-cell {
+  background: color-mix(in srgb, var(--pico-primary) 10%, transparent) !important;
+  font-weight: 600;
+}
+
+.diff-row-new > td {
+  background: color-mix(in srgb, var(--pico-ins-color) 8%, transparent);
+}
+
+.diff-row-runtime {
+  opacity: 0.5;
+}
+
+.diff-row-runtime > td {
+  font-style: italic;
+  border-top: none !important;
+  padding-top: 0 !important;
+}
+
+.diff-cell-rt {
+  background: color-mix(in srgb, var(--pico-del-color) 8%, transparent) !important;
+}
+
+.diff-row-deleted > td {
+  background: color-mix(in srgb, var(--pico-del-color) 8%, transparent);
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.diff-label {
+  font-size: var(--fs-xs);
+  color: var(--pico-muted-color);
+  font-style: italic;
+}
+
 .row-actions       { display: flex; gap: 0.4rem; }
 
 

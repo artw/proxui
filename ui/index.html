@@ -223,14 +223,17 @@
                   <button x-show="!tableMeta?.readonly" class="outline" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
                   <template x-if="moduleForTable(currentTable)">
                     <div class="sync-actions">
-                      <button class="outline"
+                      <button :class="isUnsaved(moduleForTable(currentTable)) ? '' : 'outline'"
                               :disabled="!isUnsaved(moduleForTable(currentTable))"
                               @click="configAction(moduleForTable(currentTable), 'load_runtime')">
                         <i class="ph-bold ph-arrow-right"></i> Apply</button>
-                      <button class="outline"
+                      <button :class="isDiskDirty(moduleForTable(currentTable)) ? '' : 'outline'"
                               :disabled="!isDiskDirty(moduleForTable(currentTable))"
                               @click="configAction(moduleForTable(currentTable), 'save_disk')">
                         <i class="ph-bold ph-floppy-disk"></i> Save</button>
+                      <button class="outline"
+                              @click="configAction(moduleForTable(currentTable), 'load_disk')">
+                        <i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>
                     </div>
                   </template>
                 </div>
@@ -267,9 +270,12 @@
                   </thead>
                   <tbody>
                     <template x-for="(row, idx) in sortedRows" :key="idx">
-                      <tr>
+                      <tr :class="{'diff-row-changed': getRowDiff(row), 'diff-row-new': getRowDiff(row) && !getRowDiff(row).runtime}">
                         <template x-for="col in columns" :key="col">
-                          <td :class="{'cell-editing': editingCell?.row === idx && editingCell?.col === col}"
+                          <td :class="{
+                                'cell-editing': editingCell?.row === idx && editingCell?.col === col,
+                                'diff-cell': getRowDiff(row)?.changed_cols?.includes(col)
+                              }"
                               @dblclick="!tableMeta?.readonly && startCellEdit(idx, col, row)">
                             <template x-if="editingCell?.row === idx && editingCell?.col === col">
                               <input :type="isPasswordCol(col) ? 'password' : 'text'"
@@ -294,6 +300,30 @@
                             <a href="#" @click.prevent="openEditForm(row)" class="contrast"><i class="ph-bold ph-pencil-simple"></i></a>
                             <a href="#" @click.prevent="deleteRow(row)" class="contrast"><i class="ph-bold ph-trash"></i></a>
                           </div>
+                        </td>
+                      </tr>
+                      <!-- Runtime diff row (shown below changed memory row) -->
+                      <template x-if="getRowDiff(row)?.runtime">
+                        <tr class="diff-row-runtime">
+                          <template x-for="col in columns" :key="'rt-'+col">
+                            <td :class="{'diff-cell-rt': getRowDiff(row)?.changed_cols?.includes(col)}">
+                              <span class="cell-value" x-text="getRowDiff(row).runtime[col] ?? ''"></span>
+                            </td>
+                          </template>
+                          <td x-show="!tableMeta?.readonly">
+                            <span class="diff-label">runtime</span>
+                          </td>
+                        </tr>
+                      </template>
+                    </template>
+                    <!-- Runtime-only rows (deleted from memory) -->
+                    <template x-for="(diff, key) in rowDiffs" :key="'del-'+key">
+                      <tr class="diff-row-deleted" x-show="diff.deletedFromMemory">
+                        <template x-for="col in columns" :key="'del-'+col">
+                          <td><span class="cell-value" x-text="diff.runtime?.[col] ?? ''"></span></td>
+                        </template>
+                        <td x-show="!tableMeta?.readonly">
+                          <span class="diff-label">runtime only</span>
                         </td>
                       </tr>
                     </template>
