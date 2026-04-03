@@ -149,6 +149,7 @@ function proxui() {
     _resizeStartX: 0,
     _resizeStartW: 0,
     editingCell: null,  // {row: idx, col: name}
+    rowDiffs: {},  // pk_key -> { runtime: {row}, changed_cols: [] }
 
     // Form
     showForm: false,
@@ -754,6 +755,7 @@ function proxui() {
       this.colFilterOpen = null;
       this.colWidths = {};
       this.editingCell = null;
+      this.rowDiffs = {};
       for (const cat of this.categories) {
         if (cat.tables.includes(name)) {
           this.activeCategory = cat.name;
@@ -781,6 +783,49 @@ function proxui() {
       } finally {
         this.loading = false;
       }
+      this.loadRowDiffs();
+    },
+
+    async loadRowDiffs() {
+      const mod = this.moduleForTable(this.currentTable);
+      if (!mod || !this.isUnsaved(mod)) { this.rowDiffs = {}; return; }
+      try {
+        const res = await fetch(`${API}/config/diff/${mod}`);
+        if (!res.ok) { this.rowDiffs = {}; return; }
+        const data = await res.json();
+        const diffs = {};
+        const pks = this.tableMeta?.pk_columns || [];
+        for (const dr of data.diff_rows || []) {
+          const memRow = dr.memory;
+          if (!memRow) continue; // runtime-only row, not in memory table
+          const key = pks.map(pk => String(memRow[pk] ?? '')).join('|');
+          if (dr.runtime) {
+            diffs[key] = { runtime: dr.runtime, changed_cols: dr.changed_cols || [] };
+          } else {
+            // memory-only row (new, not in runtime)
+            diffs[key] = { runtime: null, changed_cols: Object.keys(memRow) };
+          }
+        }
+        // Also track runtime-only rows (deleted from memory)
+        for (const dr of data.diff_rows || []) {
+          if (dr.runtime && !dr.memory) {
+            const key = '_rt_' + pks.map(pk => String(dr.runtime[pk] ?? '')).join('|');
+            diffs[key] = { runtime: dr.runtime, changed_cols: dr.changed_cols || [], deletedFromMemory: true };
+          }
+        }
+        this.rowDiffs = diffs;
+      } catch (e) {
+        this.rowDiffs = {};
+      }
+    },
+
+    rowDiffKey(row) {
+      const pks = this.tableMeta?.pk_columns || [];
+      return pks.map(pk => String(row[pk] ?? '')).join('|');
+    },
+
+    getRowDiff(row) {
+      return this.rowDiffs[this.rowDiffKey(row)] || null;
     },
 
     sortBy(col) {

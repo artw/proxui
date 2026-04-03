@@ -182,24 +182,6 @@ a {
   opacity: 1;
 }
 
-.stats-toggle::before,
-.stats-toggle::after {
-  top: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-}
-
-.stats-toggle::before {
-  top: calc(100% + 4px) !important;
-}
-
-.stats-toggle::after {
-  top: 100% !important;
-  border-top-color: transparent !important;
-  border-bottom-color: var(--pico-tooltip-background-color) !important;
-  border-width: 0 5px 5px 5px !important;
-}
-
 .topnav a.active-tab {
   font-weight: 700;
   border: 1px solid var(--pico-primary);

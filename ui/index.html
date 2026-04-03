@@ -44,9 +44,7 @@
     <ul>
       <li><strong><i class="ph-bold ph-lightning"></i> proxui</strong></li>
       <li>
-        <a href="#" @click.prevent="toggleStats()" class="stats-toggle"
-           :data-tooltip="statsRunning ? 'Pause polling' : 'Resume polling'"
-           data-placement="bottom">
+        <a href="#" @click.prevent="toggleStats()" class="stats-toggle">
           <i :class="statsRunning ? 'ph-bold ph-pause' : 'ph-bold ph-play'"></i>
         </a>
       </li>
@@ -73,13 +71,13 @@
     </ul>
     <ul>
       <li>
-        <a href="#" @click.prevent="toggleTheme()" data-tooltip="Toggle theme">
+        <a href="#" @click.prevent="toggleTheme()">
           <i :class="darkMode ? 'ph-bold ph-sun' : 'ph-bold ph-moon'"></i>
         </a>
       </li>
-      <li><a href="/api/docs" data-tooltip="Swagger API docs"><i class="ph-bold ph-file-text"></i> API</a></li>
+      <li><a href="/api/docs"><i class="ph-bold ph-file-text"></i> API</a></li>
       <li>
-        <a href="#" @click.prevent="logout()" data-tooltip="Logout">
+        <a href="#" @click.prevent="logout()">
           <i class="ph-bold ph-sign-out"></i> <span x-text="authUser"></span>
         </a>
       </li>
@@ -195,7 +193,7 @@
         </aside>
 
         <div class="resize-bar">
-          <button class="sidebar-toggle" @click="toggleSidebar()" :data-tooltip="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'" data-placement="right">
+          <button class="sidebar-toggle" @click="toggleSidebar()">
             <i :class="sidebarCollapsed ? 'ph-bold ph-caret-right' : 'ph-bold ph-caret-left'"></i>
           </button>
           <div class="resize-handle" :class="{'dragging': resizing}"
