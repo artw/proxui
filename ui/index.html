@@ -275,7 +275,11 @@
                   </thead>
                   <tbody>
                     <template x-for="(row, idx) in sortedRows" :key="idx">
-                      <tr :class="{'diff-row-changed': getRowDiff(row), 'diff-row-new': getRowDiff(row) && !getRowDiff(row).runtime}">
+                      <tr :class="{
+                            'diff-row-changed': getRowDiff(row),
+                            'diff-row-new': getRowDiff(row) && !getRowDiff(row).runtime,
+                            'row-pending-delete': isMarkedForDelete(row)
+                          }">
                         <template x-for="col in columns" :key="col">
                           <td :class="{
                                 'cell-editing': editingCell?.row === idx && editingCell?.col === col,
@@ -302,8 +306,15 @@
                         </template>
                         <td x-show="!tableMeta?.readonly">
                           <div class="row-actions">
-                            <a href="#" @click.prevent="openEditForm(row)" class="contrast"><i class="ph-bold ph-pencil-simple"></i></a>
-                            <a href="#" @click.prevent="deleteRow(row)" class="contrast"><i class="ph-bold ph-trash"></i></a>
+                            <template x-if="!isMarkedForDelete(row)">
+                              <span>
+                                <a href="#" @click.prevent="openEditForm(row)" class="contrast"><i class="ph-bold ph-pencil-simple"></i></a>
+                                <a href="#" @click.prevent="markDeleteRow(row)" class="contrast"><i class="ph-bold ph-trash"></i></a>
+                              </span>
+                            </template>
+                            <template x-if="isMarkedForDelete(row)">
+                              <a href="#" @click.prevent="undoDeleteRow(row)" class="undo-link">undo</a>
+                            </template>
                           </div>
                         </td>
                       </tr>

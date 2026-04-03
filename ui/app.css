@@ -715,6 +715,21 @@ a {
   font-style: italic;
 }
 
+.row-pending-delete > td {
+  text-decoration: line-through;
+  opacity: 0.4;
+}
+
+.row-pending-delete > td:last-child {
+  text-decoration: none;
+  opacity: 1;
+}
+
+.undo-link {
+  font-size: var(--fs-sm);
+  color: var(--pico-primary) !important;
+}
+
 .row-actions       { display: flex; gap: 0.4rem; }
 
 

@@ -148,6 +148,7 @@ function proxui() {
     _resizeStartW: 0,
     editingCell: null,  // {row: idx, col: name}
     rowDiffs: {},  // pk_key -> { runtime: {row}, changed_cols: [] }
+    pendingDeletes: {},  // pk_key -> true
 
     // Form
     showForm: false,
@@ -730,6 +731,7 @@ function proxui() {
       this.colWidths = {};
       this.editingCell = null;
       this.rowDiffs = {};
+      this.pendingDeletes = {};
       for (const cat of this.categories) {
         if (cat.tables.includes(name)) {
           this.activeCategory = cat.name;
@@ -909,18 +911,39 @@ function proxui() {
       }
     },
 
-    async deleteRow(row) {
-      if (!confirm('Delete this row?')) return;
-      try {
-        const pkParts = this.tableMeta.pk_columns.map(pk => encodeURIComponent(row[pk]));
-        const res = await fetch(`${API}/${this.currentTable}/${pkParts.join('/')}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        this.showToast('Row deleted');
-        await this.loadRows();
-        this.loadConfigStatus();
-      } catch (e) {
-        this.showToast('Error: ' + e.message);
-      }
+    markDeleteRow(row) {
+      const key = this.rowDiffKey(row);
+      this.pendingDeletes = { ...this.pendingDeletes, [key]: true };
+      // Actually delete after a short delay (allow undo)
+      const timeout = setTimeout(async () => {
+        if (!this.pendingDeletes[key]) return; // was undone
+        try {
+          const pkParts = this.tableMeta.pk_columns.map(pk => encodeURIComponent(row[pk]));
+          const res = await fetch(`${API}/${this.currentTable}/${pkParts.join('/')}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          this.showToast('Row deleted');
+          await this.loadRows();
+          this.loadConfigStatus();
+        } catch (e) {
+          this.showToast('Error: ' + e.message);
+        }
+        const d = { ...this.pendingDeletes };
+        delete d[key];
+        this.pendingDeletes = d;
+      }, 3000);
+      row._deleteTimeout = timeout;
+    },
+
+    undoDeleteRow(row) {
+      const key = this.rowDiffKey(row);
+      if (row._deleteTimeout) clearTimeout(row._deleteTimeout);
+      const d = { ...this.pendingDeletes };
+      delete d[key];
+      this.pendingDeletes = d;
+    },
+
+    isMarkedForDelete(row) {
+      return !!this.pendingDeletes[this.rowDiffKey(row)];
     },
 
     // ── Query view ──────────────────────────────────────────────────────
