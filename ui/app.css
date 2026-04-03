@@ -304,7 +304,8 @@ a {
 
 .content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.5rem 2rem;
   min-width: 0;
   display: flex;
@@ -483,6 +484,7 @@ a {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .table-header {
@@ -490,13 +492,8 @@ a {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.75rem;
-  position: sticky;
-  top: -1.5rem;
-  z-index: 5;
-  background: var(--pico-background-color);
-  padding: 0.75rem 0;
-  margin-top: -0.75rem;
+  padding-bottom: 0.75rem;
+  flex-shrink: 0;
 }
 
 .table-header hgroup     { margin-bottom: 0; }
@@ -509,7 +506,7 @@ a {
   font-style: italic;
 }
 
-.table-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.table-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; align-items: center; }
 
 /* ── Badges ────────────────────────────────────────────────────────── */
 
@@ -542,9 +539,12 @@ a {
   border: 1px solid var(--pico-muted-border-color);
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
-.table-wrap table    { margin: 0; white-space: nowrap; width: max-content; min-width: 100%; }
+.table-wrap table    { margin: 0; white-space: nowrap; border-collapse: collapse; }
+.table-wrap th,
+.table-wrap td       { position: relative; }
 .table-wrap th       { position: sticky; top: 0; z-index: 2;
                        background: var(--pico-card-background-color);
                        font-size: var(--fs-xs); text-transform: uppercase;
@@ -620,10 +620,52 @@ a {
   min-width: 10rem;
 }
 
-.cell-value { max-width: 300px; display: inline-block;
-              overflow: hidden; text-overflow: ellipsis; }
+.cell-value { display: inline-block;
+              overflow: hidden; text-overflow: ellipsis;
+              max-width: 100%; }
 .cell-value.masked { filter: blur(5px); cursor: pointer; transition: filter 0.15s; }
 .cell-value.masked:hover { filter: blur(3px); }
+
+/* Column resize handle */
+.col-resize {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.col-resize:hover,
+.col-resize.dragging {
+  background: var(--pico-primary);
+  opacity: 0.5;
+}
+
+/* Editable cell */
+.cell-editing {
+  padding: 0 !important;
+}
+
+.cell-editing input {
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  border: 2px solid var(--pico-primary);
+  border-radius: 0;
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
+  font-size: inherit;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.table-wrap td { cursor: default; }
+.table-wrap td:not(.cell-editing):hover {
+  background: color-mix(in srgb, var(--pico-primary) 5%, transparent);
+}
 
 .row-actions       { display: flex; gap: 0.4rem; }
 

@@ -173,7 +173,7 @@
       <div class="layout-inner">
         <aside class="sidebar" :style="'width:' + sidebarWidth + 'px'">
           <template x-for="cat in filteredCategories" :key="cat.name">
-            <details :open="cat.name === activeCategory">
+            <details :id="'cat-' + cat.name">
               <summary x-text="cat.label + ' (' + cat.tables.length + ')'"></summary>
               <ul>
                 <template x-for="t in cat.tables" :key="t">
@@ -241,7 +241,8 @@
                   <thead>
                     <tr>
                       <template x-for="col in columns" :key="col">
-                        <th :class="{'sorted': sortCol === col}">
+                        <th :class="{'sorted': sortCol === col}"
+                            :style="colWidths[col] ? 'width:' + colWidths[col] + 'px; min-width:' + colWidths[col] + 'px' : ''">
                           <div class="th-inner">
                             <span @click="sortBy(col)" class="th-label" x-text="col"></span>
                             <span class="th-icons">
@@ -252,8 +253,10 @@
                                  x-show="colFilters[col]"
                                  @click.stop="colFilters[col] = ''; colFilterOpen = null"></i>
                             </span>
-
                           </div>
+                          <div class="col-resize"
+                               @mousedown.prevent.stop="startColResize(col, $event)"
+                               @dblclick.prevent.stop="autoFitCol(col)"></div>
                         </th>
                       </template>
                       <th x-show="!tableMeta?.readonly">Actions</th>
@@ -263,11 +266,24 @@
                     <template x-for="(row, idx) in sortedRows" :key="idx">
                       <tr>
                         <template x-for="col in columns" :key="col">
-                          <td>
-                            <span x-show="!isPasswordCol(col)" x-text="row[col] ?? ''" class="cell-value"></span>
-                            <span x-show="isPasswordCol(col)" class="cell-value masked"
-                                  @click="$el.classList.toggle('masked')"
-                                  x-text="row[col] ?? ''"></span>
+                          <td :class="{'cell-editing': editingCell?.row === idx && editingCell?.col === col}"
+                              @dblclick="!tableMeta?.readonly && startCellEdit(idx, col, row)">
+                            <template x-if="editingCell?.row === idx && editingCell?.col === col">
+                              <input :type="isPasswordCol(col) ? 'password' : 'text'"
+                                     :value="row[col] ?? ''"
+                                     @keydown.enter="saveCellEdit($event.target.value, row, col)"
+                                     @keydown.escape="editingCell = null"
+                                     @blur="saveCellEdit($event.target.value, row, col)"
+                                     x-init="$nextTick(() => $el.focus())">
+                            </template>
+                            <template x-if="!(editingCell?.row === idx && editingCell?.col === col)">
+                              <span>
+                                <span x-show="!isPasswordCol(col)" x-text="row[col] ?? ''" class="cell-value"></span>
+                                <span x-show="isPasswordCol(col)" class="cell-value masked"
+                                      @click.stop="$el.classList.toggle('masked')"
+                                      x-text="row[col] ?? ''"></span>
+                              </span>
+                            </template>
                           </td>
                         </template>
                         <td x-show="!tableMeta?.readonly">

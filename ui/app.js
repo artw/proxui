@@ -141,6 +141,11 @@ function proxui() {
     colFilterOpen: null,
     colFilterStyle: '',
     rowLimit: 50,
+    colWidths: {},
+    _resizingCol: null,
+    _resizeStartX: 0,
+    _resizeStartW: 0,
+    editingCell: null,  // {row: idx, col: name}
 
     // Form
     showForm: false,
@@ -525,6 +530,111 @@ function proxui() {
 
     displayName(t) { return displayName(t); },
 
+    // ── Column resize ─────────────────────────────────────────────
+
+    startColResize(col, event) {
+      const th = event.target.closest('th');
+      this._resizingCol = col;
+      this._resizeStartX = event.clientX;
+      this._resizeStartW = th.offsetWidth;
+      const onMove = (e) => {
+        const diff = e.clientX - this._resizeStartX;
+        const newW = Math.max(40, this._resizeStartW + diff);
+        this.colWidths = { ...this.colWidths, [col]: newW };
+      };
+      const onUp = () => {
+        this._resizingCol = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+
+    autoFitCol(col) {
+      // Measure max content width for this column
+      const wrap = document.querySelector('.table-wrap');
+      if (!wrap) return;
+      const table = wrap.querySelector('table');
+      if (!table) return;
+      const colIdx = this.columns.indexOf(col);
+      if (colIdx < 0) return;
+      let maxW = 40;
+      // Check header
+      const ths = table.querySelectorAll('thead th');
+      if (ths[colIdx]) {
+        const label = ths[colIdx].querySelector('.th-label');
+        if (label) maxW = Math.max(maxW, label.scrollWidth + 50);
+      }
+      // Check data cells
+      const rows = table.querySelectorAll('tbody tr');
+      for (const row of rows) {
+        const td = row.children[colIdx];
+        if (td) {
+          const span = td.querySelector('.cell-value');
+          if (span) maxW = Math.max(maxW, span.scrollWidth + 20);
+          else maxW = Math.max(maxW, td.scrollWidth + 10);
+        }
+      }
+      this.colWidths = { ...this.colWidths, [col]: maxW };
+    },
+
+    // ── Inline cell editing ───────────────────────────────────────
+
+    startCellEdit(rowIdx, col, row) {
+      if (this.tableMeta?.readonly) return;
+      this.editingCell = { row: rowIdx, col };
+    },
+
+    async saveCellEdit(newVal, row, col) {
+      if (!this.editingCell) return;
+      this.editingCell = null;
+      const oldVal = row[col];
+      if (String(newVal) === String(oldVal ?? '')) return;
+      // Build payload from current row
+      const payload = {};
+      for (const c of this.columns) {
+        payload[c] = c === col ? newVal : row[c];
+      }
+      // Convert types
+      const meta = this.tableMeta;
+      if (meta) {
+        for (const f of meta.columns) {
+          if (payload[f.name] === '') {
+            if (f.nullable) payload[f.name] = null;
+            else if (f.default !== null) delete payload[f.name];
+          } else if (f.type === 'int') {
+            payload[f.name] = parseInt(payload[f.name], 10) || 0;
+          } else if (f.type === 'float') {
+            payload[f.name] = parseFloat(payload[f.name]) || 0;
+          }
+        }
+      }
+      try {
+        const pkParts = meta.pk_columns.map(pk => encodeURIComponent(row[pk]));
+        const url = `${API}/${this.currentTable}/${pkParts.join('/')}`;
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || JSON.stringify(err));
+        }
+        row[col] = newVal;
+        this.showToast(`Updated ${col}`);
+        this.loadConfigStatus();
+      } catch (e) {
+        this.showToast('Error: ' + e.message);
+        await this.loadRows();
+      }
+    },
+
     openColFilter(col, event) {
       if (this.colFilterOpen === col) { this.colFilterOpen = null; return; }
       const rect = event.target.getBoundingClientRect();
@@ -597,8 +707,17 @@ function proxui() {
       this.sortAsc = true;
       this.colFilters = {};
       this.colFilterOpen = null;
+      this.colWidths = {};
+      this.editingCell = null;
       for (const cat of this.categories) {
-        if (cat.tables.includes(name)) { this.activeCategory = cat.name; break; }
+        if (cat.tables.includes(name)) {
+          this.activeCategory = cat.name;
+          this.$nextTick(() => {
+            const el = document.getElementById('cat-' + cat.name);
+            if (el) el.open = true;
+          });
+          break;
+        }
       }
       this._updateHash();
       await this.loadRows();
