@@ -148,6 +148,7 @@ function proxui() {
     _resizeStartW: 0,
     editingCell: null,  // {row: idx, col: name}
     rowDiffs: {},  // pk_key -> { runtime: {row}, changed_cols: [] }
+    showDiffs: false,
     pendingDeletes: {},  // pk_key -> true
 
     // Form
@@ -731,6 +732,7 @@ function proxui() {
       this.colWidths = {};
       this.editingCell = null;
       this.rowDiffs = {};
+      this.showDiffs = false;
       this.pendingDeletes = {};
       for (const cat of this.categories) {
         if (cat.tables.includes(name)) {

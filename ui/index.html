@@ -223,6 +223,11 @@
                   <button x-show="!tableMeta?.readonly" class="outline" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
                   <template x-if="moduleForTable(currentTable)">
                     <div class="sync-actions">
+                      <button class="outline"
+                              x-show="Object.keys(rowDiffs).length > 0"
+                              @click="showDiffs = !showDiffs"
+                              :class="{'active-toggle': showDiffs}">
+                        <i class="ph-bold ph-git-diff"></i> Diff</button>
                       <button :class="isUnsaved(moduleForTable(currentTable)) ? '' : 'outline'"
                               :disabled="!isUnsaved(moduleForTable(currentTable))"
                               @click="configAction(moduleForTable(currentTable), 'load_runtime')">
@@ -276,14 +281,13 @@
                   <tbody>
                     <template x-for="(row, idx) in sortedRows" :key="idx">
                       <tr :class="{
-                            'diff-row-changed': getRowDiff(row),
-                            'diff-row-new': getRowDiff(row) && !getRowDiff(row).runtime,
+                            'diff-row-changed': showDiffs && getRowDiff(row),
                             'row-pending-delete': isMarkedForDelete(row)
                           }">
                         <template x-for="col in columns" :key="col">
                           <td :class="{
                                 'cell-editing': editingCell?.row === idx && editingCell?.col === col,
-                                'diff-cell': getRowDiff(row)?.changed_cols?.includes(col)
+                                'diff-cell': showDiffs && getRowDiff(row)?.changed_cols?.includes(col)
                               }"
                               @dblclick="!tableMeta?.readonly && startCellEdit(idx, col, row)">
                             <template x-if="editingCell?.row === idx && editingCell?.col === col">
@@ -319,10 +323,10 @@
                         </td>
                       </tr>
                       <!-- Runtime diff row (shown below changed memory row) -->
-                      <template x-if="getRowDiff(row)?.runtime">
+                      <template x-if="showDiffs && getRowDiff(row)?.runtime">
                         <tr class="diff-row-runtime">
                           <template x-for="col in columns" :key="'rt-'+col">
-                            <td :class="{'diff-cell-rt': getRowDiff(row)?.changed_cols?.includes(col)}">
+                            <td :class="{'diff-cell': getRowDiff(row)?.changed_cols?.includes(col)}">
                               <span class="cell-value" x-text="getRowDiff(row).runtime[col] ?? ''"></span>
                             </td>
                           </template>
@@ -334,7 +338,7 @@
                     </template>
                     <!-- Runtime-only rows (deleted from memory) -->
                     <template x-for="(diff, key) in rowDiffs" :key="'del-'+key">
-                      <tr class="diff-row-deleted" x-show="diff.deletedFromMemory">
+                      <tr class="diff-row-deleted" x-show="showDiffs && diff.deletedFromMemory">
                         <template x-for="col in columns" :key="'del-'+col">
                           <td><span class="cell-value" x-text="diff.runtime?.[col] ?? ''"></span></td>
                         </template>

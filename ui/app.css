@@ -465,6 +465,12 @@ a {
   border-left: 1px solid var(--pico-muted-border-color);
 }
 
+.active-toggle {
+  background: var(--pico-primary-background) !important;
+  color: var(--pico-primary-inverse) !important;
+  border-color: var(--pico-primary-background) !important;
+}
+
 /* ── Table header ──────────────────────────────────────────────────── */
 
 .table-content {
@@ -677,35 +683,29 @@ a {
 
 /* Row diffs (memory vs runtime) */
 .diff-row-changed > td {
-  border-left-color: transparent;
+  background: color-mix(in srgb, var(--pico-primary) 6%, transparent);
 }
 
 .diff-cell {
-  background: color-mix(in srgb, var(--pico-primary) 10%, transparent) !important;
   font-weight: 600;
 }
 
-.diff-row-new > td {
-  background: color-mix(in srgb, var(--pico-ins-color) 8%, transparent);
-}
-
 .diff-row-runtime {
-  opacity: 0.5;
+  opacity: 0.35;
+  font-size: var(--fs-sm);
 }
 
 .diff-row-runtime > td {
-  font-style: italic;
   border-top: none !important;
   padding-top: 0 !important;
 }
 
-.diff-cell-rt {
-  background: color-mix(in srgb, var(--pico-del-color) 8%, transparent) !important;
+.diff-row-deleted {
+  opacity: 0.35;
+  font-size: var(--fs-sm);
 }
 
 .diff-row-deleted > td {
-  background: color-mix(in srgb, var(--pico-del-color) 8%, transparent);
-  opacity: 0.5;
   text-decoration: line-through;
 }
 
