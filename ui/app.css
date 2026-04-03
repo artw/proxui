@@ -229,6 +229,7 @@ a {
   display: flex;
   flex: 1;
   height: 100%;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -331,10 +332,11 @@ a {
 /* ── Content area ──────────────────────────────────────────────────── */
 
 .content {
-  flex: 1;
+  flex: 1 1 0;
   overflow: auto;
   padding: 1.5rem 2rem;
   min-width: 0;
+  width: 0;  /* flex will expand, but prevents content from pushing */
   display: flex;
   flex-direction: column;
 }
@@ -513,13 +515,11 @@ a {
 .table-content {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  height: 100%;
+  width: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  /* Fill content area exactly — no growing beyond */
-  max-height: 100%;
-  max-width: 100%;
 }
 
 .table-header {
@@ -529,6 +529,8 @@ a {
   gap: 1rem;
   padding-bottom: 0.75rem;
   flex-shrink: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .table-header hgroup     { margin-bottom: 0; }
@@ -541,7 +543,7 @@ a {
   font-style: italic;
 }
 
-.table-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; align-items: center; }
+.table-actions { display: flex; gap: 0.5rem; flex-shrink: 1; flex-wrap: wrap; align-items: center; min-width: 0; }
 
 /* ── Badges ────────────────────────────────────────────────────────── */
 
@@ -574,10 +576,13 @@ a {
   border: 1px solid var(--pico-muted-border-color);
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   position: relative;
 }
 
-.table-wrap table    { margin: 0; white-space: nowrap; border-collapse: collapse; }
+.table-wrap table    { margin: 0; white-space: nowrap; border-collapse: collapse;
+                       width: max-content; }
 .table-wrap th,
 .table-wrap td       { position: relative; }
 .table-wrap th       { position: sticky; top: 0; z-index: 2;
