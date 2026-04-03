@@ -7,17 +7,18 @@ Run with:
 
 from __future__ import annotations
 
-import base64
 import hashlib
+import hmac
+import logging
 import os
 import pathlib
+import re
 import secrets
 import time
 
 import aiomysql
 import asyncpg
 from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -26,65 +27,86 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .crud_router import router as crud_router
 from .table_metadata import TABLE_METADATA
 
-# ── Session secret ─────────────────────────────────────────────
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("proxui")
+
+# ── Session management ───────────────────────────────────────
 _SESSION_SECRET = os.environ.get("PROXUI_SESSION_SECRET", secrets.token_hex(32))
 _COOKIE_NAME = "proxui_session"
-_PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/check", "/api/docs", "/api/openapi.json"}
+_PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/logout",
+                 "/api/v1/auth/check", "/api/docs", "/api/openapi.json"}
+
+# Server-side session store: session_id -> {user, password, created}
+_sessions: dict[str, dict] = {}
 
 
-def _sign(data: str) -> str:
-    sig = hashlib.sha256((_SESSION_SECRET + data).encode()).hexdigest()[:16]
-    return base64.b64encode(f"{sig}:{data}".encode()).decode()
+def _make_session_id() -> str:
+    return secrets.token_urlsafe(32)
 
 
-def _verify(token: str) -> str | None:
+def _sign_session(session_id: str) -> str:
+    """HMAC-sign a session ID for tamper detection."""
+    sig = hmac.new(_SESSION_SECRET.encode(), session_id.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{sig}.{session_id}"
+
+
+def _verify_session(token: str) -> str | None:
+    """Verify HMAC and return session_id, or None."""
     try:
-        raw = base64.b64decode(token).decode()
-        sig, data = raw.split(":", 1)
-        expected = hashlib.sha256((_SESSION_SECRET + data).encode()).hexdigest()[:16]
-        if sig == expected:
-            return data
+        sig, session_id = token.split(".", 1)
+        expected = hmac.new(_SESSION_SECRET.encode(), session_id.encode(), hashlib.sha256).hexdigest()[:16]
+        if hmac.compare_digest(sig, expected):
+            return session_id
     except Exception:
         pass
     return None
 
 
-# ── Per-user pool cache ────────────────────────────────────────
-_user_pools: dict[str, aiomysql.Pool] = {}
+# ── Per-session pool cache ─────────────────────────────────────
+_session_pools: dict[str, aiomysql.Pool] = {}
 
 
-async def _get_user_pool(user: str, password: str) -> aiomysql.Pool:
-    key = f"{user}:{password}"
-    if key not in _user_pools:
-        _user_pools[key] = await aiomysql.create_pool(
+async def _get_session_pool(session_id: str) -> aiomysql.Pool:
+    if session_id not in _session_pools:
+        sess = _sessions.get(session_id)
+        if not sess:
+            raise ValueError("Session expired")
+        _session_pools[session_id] = await aiomysql.create_pool(
             host=os.environ.get("PROXYSQL_ADMIN_HOST", "127.0.0.1"),
             port=int(os.environ.get("PROXYSQL_ADMIN_PORT", "6032")),
-            user=user,
-            password=password,
+            user=sess["user"],
+            password=sess["password"],
             autocommit=True,
             minsize=1,
             maxsize=5,
         )
-    return _user_pools[key]
+    return _session_pools[session_id]
+
+
+async def _destroy_session(session_id: str):
+    """Clean up session and its pool."""
+    _sessions.pop(session_id, None)
+    pool = _session_pools.pop(session_id, None)
+    if pool:
+        pool.close()
+        await pool.wait_closed()
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        # Allow public paths and static UI files
         if path in _PUBLIC_PATHS or not path.startswith("/api/"):
             return await call_next(request)
-        # Check session cookie
         token = request.cookies.get(_COOKIE_NAME)
         if not token:
             return JSONResponse({"error": "Not authenticated"}, status_code=401)
-        creds = _verify(token)
-        if not creds:
+        session_id = _verify_session(token)
+        if not session_id or session_id not in _sessions:
             return JSONResponse({"error": "Invalid session"}, status_code=401)
-        user, password = creds.split(":", 1)
         try:
-            request.state.pool = await _get_user_pool(user, password)
-            request.state.user = user
+            request.state.pool = await _get_session_pool(session_id)
+            request.state.user = _sessions[session_id]["user"]
+            request.state.session_id = session_id
         except Exception as e:
             return JSONResponse({"error": f"Auth failed: {e}"}, status_code=401)
         return await call_next(request)
@@ -99,13 +121,6 @@ app = FastAPI(
 )
 
 app.add_middleware(AuthMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(crud_router, prefix="/api/v1")
 
@@ -131,16 +146,25 @@ async def auth_login(req: LoginRequest, response: Response):
         conn.close()
     except Exception as e:
         return JSONResponse({"error": f"Login failed: {e}"}, status_code=401)
-    token = _sign(f"{req.username}:{req.password}")
+    session_id = _make_session_id()
+    _sessions[session_id] = {"user": req.username, "password": req.password,
+                             "created": time.time()}
+    token = _sign_session(session_id)
     response.set_cookie(
         _COOKIE_NAME, token,
         httponly=True, samesite="strict", max_age=86400,
     )
+    logger.info("Login: %s", req.username)
     return {"ok": True, "user": req.username}
 
 
 @app.post("/api/v1/auth/logout")
-async def auth_logout(response: Response):
+async def auth_logout(request: Request, response: Response):
+    token = request.cookies.get(_COOKIE_NAME)
+    if token:
+        session_id = _verify_session(token)
+        if session_id:
+            await _destroy_session(session_id)
     response.delete_cookie(_COOKIE_NAME)
     return {"ok": True}
 
@@ -150,11 +174,10 @@ async def auth_check(request: Request):
     token = request.cookies.get(_COOKIE_NAME)
     if not token:
         return JSONResponse({"authenticated": False}, status_code=401)
-    creds = _verify(token)
-    if not creds:
+    session_id = _verify_session(token)
+    if not session_id or session_id not in _sessions:
         return JSONResponse({"authenticated": False}, status_code=401)
-    user = creds.split(":", 1)[0]
-    return {"authenticated": True, "user": user}
+    return {"authenticated": True, "user": _sessions[session_id]["user"]}
 
 
 @app.get("/api/v1/health")
@@ -194,26 +217,22 @@ async def table_counts(request: Request):
         async with conn.cursor() as cur:
             await cur.execute("SHOW TABLES")
             tables = [row[0] for row in await cur.fetchall()]
-    for name in tables:
-        try:
-            async with pool.acquire() as conn:
-                async with conn.cursor() as cur:
+            for name in tables:
+                try:
                     await cur.execute(f"SELECT COUNT(*) FROM {name}")
                     row = await cur.fetchone()
                     counts[name] = row[0] if row else 0
-        except Exception:
-            counts[name] = 0
-    # Also check stats tables
-    for name in list(TABLE_METADATA.keys()):
-        if name not in counts and name.startswith("stats_"):
-            try:
-                async with pool.acquire() as conn:
-                    async with conn.cursor() as cur:
+                except Exception:
+                    counts[name] = 0
+            # Also check stats tables
+            for name in list(TABLE_METADATA.keys()):
+                if name not in counts and name.startswith("stats_"):
+                    try:
                         await cur.execute(f"SELECT COUNT(*) FROM {name}")
                         row = await cur.fetchone()
                         counts[name] = row[0] if row else 0
-            except Exception:
-                pass
+                    except Exception:
+                        pass
     return counts
 
 
@@ -442,6 +461,9 @@ async def _run_pg(conn, sql, limit):
 @app.post("/api/v1/query")
 async def run_query(req: QueryRequest, request: Request):
     """Execute free-form SQL against any target."""
+    user = getattr(request.state, 'user', '?')
+    logger.info("Query [%s] target=%s db=%s sql=%s", user, req.target,
+                req.database or '-', req.sql[:200])
     conn = None
     is_pool_conn = False
     try:
@@ -450,7 +472,8 @@ async def run_query(req: QueryRequest, request: Request):
         sql = req.sql
         # MySQL: USE <db> for non-admin targets
         if req.database and not _is_pg_conn(conn) and req.target != "admin":
-            sql = "USE `" + req.database + "`;" + chr(10) + sql
+            db_safe = re.sub(r"[^a-zA-Z0-9_]", "", req.database)
+            sql = "USE `" + db_safe + "`;" + chr(10) + sql
         if _is_pg_conn(conn):
             result = await _run_pg(conn, sql, req.limit)
         else:
@@ -629,6 +652,8 @@ class ConfigAction(BaseModel):
 @app.post("/api/v1/config/action")
 async def config_action(req: ConfigAction, request: Request):
     """Execute a LOAD/SAVE command for a config module."""
+    user = getattr(request.state, 'user', '?')
+    logger.info("Config action [%s] %s.%s", user, req.module, req.action)
     if req.module not in CONFIG_MODULES:
         return {"ok": False, "error": f"Unknown module: {req.module}"}
     mod = CONFIG_MODULES[req.module]
