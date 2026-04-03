@@ -200,7 +200,7 @@
           </template>
 
           <template x-if="currentTable">
-            <div>
+            <div class="table-content">
               <div class="table-header">
                 <hgroup>
                   <h2 x-text="currentTable"></h2>
@@ -456,7 +456,10 @@
   </div>
 
   <!-- Create/Edit modal (global) -->
-  <dialog :open="showForm" @close="showForm = false">
+  <dialog x-ref="formDialog"
+          x-effect="showForm ? $refs.formDialog?.showModal() : $refs.formDialog?.close()"
+          @close="showForm = false"
+          @click.self="showForm = false">
     <article>
       <header>
         <button aria-label="Close" rel="prev" @click="showForm = false"></button>

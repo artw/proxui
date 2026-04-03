@@ -304,9 +304,11 @@ a {
 
 .content {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   padding: 1.5rem 2rem;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Stats grid */
@@ -476,12 +478,25 @@ a {
 
 /* ── Table header ──────────────────────────────────────────────────── */
 
+.table-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .table-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  position: sticky;
+  top: -1.5rem;
+  z-index: 5;
+  background: var(--pico-background-color);
+  padding: 0.75rem 0;
+  margin-top: -0.75rem;
 }
 
 .table-header hgroup     { margin-bottom: 0; }
@@ -522,12 +537,14 @@ a {
 /* ── Data table ────────────────────────────────────────────────────── */
 
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
   border-radius: 6px;
   border: 1px solid var(--pico-muted-border-color);
+  flex: 1;
+  min-height: 0;
 }
 
-.table-wrap table    { margin: 0; white-space: nowrap; }
+.table-wrap table    { margin: 0; white-space: nowrap; width: max-content; min-width: 100%; }
 .table-wrap th       { position: sticky; top: 0; z-index: 2;
                        background: var(--pico-card-background-color);
                        font-size: var(--fs-xs); text-transform: uppercase;
@@ -630,7 +647,26 @@ a {
 
 /* ── Dialog / Modal ────────────────────────────────────────────────── */
 
-dialog article     { max-width: 550px; max-height: 80vh; overflow-y: auto; }
+dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  max-width: 90vw;
+  max-height: 90vh;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 8px;
+  background: var(--pico-card-background-color);
+  padding: 0;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+dialog article     { max-width: 550px; max-height: 80vh; overflow-y: auto;
+                     margin: 0; border: none; box-shadow: none; }
 dialog label       { display: block; margin-bottom: 0.75rem; }
 dialog label span  { font-weight: 600; }
 dialog footer      { display: flex; gap: 0.5rem; justify-content: flex-end; }
