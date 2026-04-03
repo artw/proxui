@@ -23,8 +23,24 @@
 </head>
 <body x-data="proxui()" x-init="init()">
 
+  <!-- Login screen -->
+  <div x-show="!authenticated" class="login-wrapper">
+    <form class="login-card" @submit.prevent="login()">
+      <h2><i class="ph-bold ph-lightning"></i> proxui</h2>
+      <p>Connect to ProxySQL admin</p>
+      <label>Username
+        <input type="text" x-model="loginUser" required autofocus placeholder="admin">
+      </label>
+      <label>Password
+        <input type="password" x-model="loginPass" required placeholder="••••••">
+      </label>
+      <div class="login-error" x-show="loginError" x-text="loginError"></div>
+      <button type="submit" :aria-busy="loginLoading" :disabled="loginLoading">Login</button>
+    </form>
+  </div>
+
   <!-- Top nav -->
-  <nav class="topnav">
+  <nav class="topnav" x-show="authenticated">
     <ul>
       <li><strong><i class="ph-bold ph-lightning"></i> proxui</strong></li>
       <li>
@@ -56,22 +72,37 @@
       </li>
     </ul>
     <ul>
+      <li x-show="view === 'dashboard'" class="dash-toggles">
+        <label><input type="checkbox" x-model="showMySQL" @change="persistDashToggle('showMySQL')"> MySQL</label>
+        <label><input type="checkbox" x-model="showPgSQL" @change="persistDashToggle('showPgSQL')"> PgSQL</label>
+        <label><input type="checkbox" x-model="showClickHouse" @change="persistDashToggle('showClickHouse')"> ClickHouse</label>
+      </li>
       <li>
         <a href="#" @click.prevent="toggleTheme()" data-tooltip="Toggle theme">
           <i :class="darkMode ? 'ph-bold ph-sun' : 'ph-bold ph-moon'"></i>
         </a>
       </li>
       <li><a href="/api/docs" data-tooltip="Swagger API docs"><i class="ph-bold ph-file-text"></i> API</a></li>
+      <li>
+        <a href="#" @click.prevent="logout()" data-tooltip="Logout">
+          <i class="ph-bold ph-sign-out"></i> <span x-text="authUser"></span>
+        </a>
+      </li>
     </ul>
   </nav>
 
-  <div class="layout">
+  <div class="layout" x-show="authenticated">
 
     <!-- ═══ DASHBOARD ═══ -->
-    <main class="content" x-show="view === 'dashboard'" x-init="startStats();">
+    <main class="content" x-show="view === 'dashboard'">
         <!-- Config sync bar -->
         <div class="config-bar" x-show="configGroups.length > 0">
-          <template x-for="g in configGroups" :key="g.label">
+          <template x-for="g in configGroups.filter(g => {
+            if (g.label === 'MySQL' && !showMySQL) return false;
+            if (g.label === 'PgSQL' && !showPgSQL) return false;
+            if (g.label === 'ClickHouse' && !showClickHouse) return false;
+            return true;
+          })" :key="g.label">
             <div class="config-group">
               <span class="config-group-label" x-text="g.label"></span>
               <template x-for="m in g.modules" :key="m.module">
@@ -134,8 +165,8 @@
           </div>
         </div>
 
-        <!-- Stats charts -->
-        <div class="stats-grid">
+        <!-- Stats charts (MySQL) -->
+        <div class="stats-grid" x-show="showMySQL">
           <div class="chart-card">
             <h4>Connections</h4>
             <div id="chart-connections"></div>
@@ -154,8 +185,8 @@
           </div>
         </div>
 
-        <!-- Command latency + top queries -->
-        <div class="stats-grid">
+        <!-- Command latency + top queries (MySQL) -->
+        <div class="stats-grid" x-show="showMySQL">
           <div class="chart-card wide">
             <div class="chart-card-header">
               <h4>Command Counters</h4>

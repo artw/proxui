@@ -1,12 +1,8 @@
 """
 Database helpers for connecting to the ProxySQL admin interface.
 
-Uses aiomysql to talk to the admin port (default 6032).
-Configure via environment variables:
-    PROXYSQL_ADMIN_HOST  (default: 127.0.0.1)
-    PROXYSQL_ADMIN_PORT  (default: 6032)
-    PROXYSQL_ADMIN_USER  (default: admin)
-    PROXYSQL_ADMIN_PASS  (default: admin)
+Uses per-user connection pools created by the auth middleware.
+Falls back to env-var based pool if no request context.
 """
 
 from __future__ import annotations
@@ -15,15 +11,16 @@ import os
 from typing import Any
 
 import aiomysql
+from fastapi import Request
 
 
-_POOL: aiomysql.Pool | None = None
+_FALLBACK_POOL: aiomysql.Pool | None = None
 
 
-async def get_pool() -> aiomysql.Pool:
-    global _POOL
-    if _POOL is None:
-        _POOL = await aiomysql.create_pool(
+async def _get_fallback_pool() -> aiomysql.Pool:
+    global _FALLBACK_POOL
+    if _FALLBACK_POOL is None:
+        _FALLBACK_POOL = await aiomysql.create_pool(
             host=os.environ.get("PROXYSQL_ADMIN_HOST", "127.0.0.1"),
             port=int(os.environ.get("PROXYSQL_ADMIN_PORT", "6032")),
             user=os.environ.get("PROXYSQL_ADMIN_USER", "admin"),
@@ -32,12 +29,19 @@ async def get_pool() -> aiomysql.Pool:
             minsize=1,
             maxsize=5,
         )
-    return _POOL
+    return _FALLBACK_POOL
 
 
-async def get_admin_conn():
-    """FastAPI dependency: yields a connection from the pool."""
-    pool = await get_pool()
+async def get_pool(request: Request | None = None) -> aiomysql.Pool:
+    """Return the user's pool from request state, or fallback pool."""
+    if request and hasattr(request.state, 'pool'):
+        return request.state.pool
+    return await _get_fallback_pool()
+
+
+async def get_admin_conn(request: Request):
+    """FastAPI dependency: yields a connection from the user's pool."""
+    pool = await get_pool(request)
     async with pool.acquire() as conn:
         yield conn
 

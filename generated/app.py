@@ -7,19 +7,88 @@ Run with:
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import pathlib
+import secrets
 import time
 
 import aiomysql
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .crud_router import router as crud_router
 from .table_metadata import TABLE_METADATA
+
+# ── Session secret ─────────────────────────────────────────────
+_SESSION_SECRET = os.environ.get("PROXUI_SESSION_SECRET", secrets.token_hex(32))
+_COOKIE_NAME = "proxui_session"
+_PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/check", "/api/docs", "/api/openapi.json"}
+
+
+def _sign(data: str) -> str:
+    sig = hashlib.sha256((_SESSION_SECRET + data).encode()).hexdigest()[:16]
+    return base64.b64encode(f"{sig}:{data}".encode()).decode()
+
+
+def _verify(token: str) -> str | None:
+    try:
+        raw = base64.b64decode(token).decode()
+        sig, data = raw.split(":", 1)
+        expected = hashlib.sha256((_SESSION_SECRET + data).encode()).hexdigest()[:16]
+        if sig == expected:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+# ── Per-user pool cache ────────────────────────────────────────
+_user_pools: dict[str, aiomysql.Pool] = {}
+
+
+async def _get_user_pool(user: str, password: str) -> aiomysql.Pool:
+    key = f"{user}:{password}"
+    if key not in _user_pools:
+        _user_pools[key] = await aiomysql.create_pool(
+            host=os.environ.get("PROXYSQL_ADMIN_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PROXYSQL_ADMIN_PORT", "6032")),
+            user=user,
+            password=password,
+            autocommit=True,
+            minsize=1,
+            maxsize=5,
+        )
+    return _user_pools[key]
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        # Allow public paths and static UI files
+        if path in _PUBLIC_PATHS or not path.startswith("/api/"):
+            return await call_next(request)
+        # Check session cookie
+        token = request.cookies.get(_COOKIE_NAME)
+        if not token:
+            return JSONResponse({"error": "Not authenticated"}, status_code=401)
+        creds = _verify(token)
+        if not creds:
+            return JSONResponse({"error": "Invalid session"}, status_code=401)
+        user, password = creds.split(":", 1)
+        try:
+            request.state.pool = await _get_user_pool(user, password)
+            request.state.user = user
+        except Exception as e:
+            return JSONResponse({"error": f"Auth failed: {e}"}, status_code=401)
+        return await call_next(request)
+
 
 app = FastAPI(
     title="proxui",
@@ -29,6 +98,7 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,16 +110,63 @@ app.add_middleware(
 app.include_router(crud_router, prefix="/api/v1")
 
 
+# ── Auth endpoints ─────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/v1/auth/login")
+async def auth_login(req: LoginRequest, response: Response):
+    """Validate credentials against ProxySQL and set session cookie."""
+    try:
+        conn = await aiomysql.connect(
+            host=os.environ.get("PROXYSQL_ADMIN_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PROXYSQL_ADMIN_PORT", "6032")),
+            user=req.username,
+            password=req.password,
+            autocommit=True,
+        )
+        conn.close()
+    except Exception as e:
+        return JSONResponse({"error": f"Login failed: {e}"}, status_code=401)
+    token = _sign(f"{req.username}:{req.password}")
+    response.set_cookie(
+        _COOKIE_NAME, token,
+        httponly=True, samesite="strict", max_age=86400,
+    )
+    return {"ok": True, "user": req.username}
+
+
+@app.post("/api/v1/auth/logout")
+async def auth_logout(response: Response):
+    response.delete_cookie(_COOKIE_NAME)
+    return {"ok": True}
+
+
+@app.get("/api/v1/auth/check")
+async def auth_check(request: Request):
+    token = request.cookies.get(_COOKIE_NAME)
+    if not token:
+        return JSONResponse({"authenticated": False}, status_code=401)
+    creds = _verify(token)
+    if not creds:
+        return JSONResponse({"authenticated": False}, status_code=401)
+    user = creds.split(":", 1)[0]
+    return {"authenticated": True, "user": user}
+
+
 @app.get("/api/v1/health")
 async def health():
     return {"status": "ok"}
 
 
 @app.get("/api/v1/tables")
-async def list_tables():
+async def list_tables(request: Request):
     """Return table metadata, filtered to tables that actually exist in ProxySQL."""
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute("SHOW TABLES")
@@ -106,10 +223,10 @@ async def _get_proxy_creds(pool):
             return (row[0], row[1]) if row else (None, None)
 
 
-async def _adhoc_connect(target: str, database: str | None = None):
+async def _adhoc_connect(target: str, database: str | None = None, request: Request | None = None):
     """Return (conn, is_pool_conn, label) for the given target."""
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
     # For PG targets, default to 'postgres' if no db specified
     pg_db = database or "postgres"
 
@@ -290,13 +407,13 @@ async def _run_pg(conn, sql, limit):
 
 
 @app.post("/api/v1/query")
-async def run_query(req: QueryRequest):
+async def run_query(req: QueryRequest, request: Request):
     """Execute free-form SQL against any target."""
     conn = None
     is_pool_conn = False
     try:
         conn, is_pool_conn, label = await _adhoc_connect(
-            req.target, database=req.database or None)
+            req.target, database=req.database or None, request=request)
         sql = req.sql
         # MySQL: USE <db> for non-admin targets
         if req.database and not _is_pg_conn(conn) and req.target != "admin":
@@ -313,7 +430,7 @@ async def run_query(req: QueryRequest):
         if conn:
             if is_pool_conn:
                 from .db import get_pool
-                pool = await get_pool()
+                pool = await get_pool(request)
                 pool.release(conn)
             elif _is_pg_conn(conn):
                 await conn.close()
@@ -421,10 +538,10 @@ async def _hash_rows(pool, table: str) -> str:
 
 
 @app.get("/api/v1/config/status")
-async def config_status():
+async def config_status(request: Request):
     """Compare memory vs runtime vs disk for each config module."""
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
     result = []
     for mod_name, mod in CONFIG_MODULES.items():
         entry = {"module": mod_name, "in_sync": True,
@@ -448,7 +565,7 @@ class ConfigAction(BaseModel):
 
 
 @app.post("/api/v1/config/action")
-async def config_action(req: ConfigAction):
+async def config_action(req: ConfigAction, request: Request):
     """Execute a LOAD/SAVE command for a config module."""
     if req.module not in CONFIG_MODULES:
         return {"ok": False, "error": f"Unknown module: {req.module}"}
@@ -457,7 +574,7 @@ async def config_action(req: ConfigAction):
         return {"ok": False, "error": f"Unknown action: {req.action}"}
     cmd = mod[req.action]
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
     try:
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -468,13 +585,13 @@ async def config_action(req: ConfigAction):
 
 
 @app.get("/api/v1/config/diff/{module}")
-async def config_diff(module: str):
+async def config_diff(module: str, request: Request):
     """Return row-level diff between memory and runtime for a module."""
     if module not in CONFIG_MODULES:
         return {"error": f"Unknown module: {module}"}
     mod = CONFIG_MODULES[module]
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(f"SELECT * FROM {mod['memory'][0]} ORDER BY 1")
@@ -636,16 +753,16 @@ async def _schema_pg(conn):
 
 
 @app.get("/api/v1/schema/{target:path}")
-async def get_schema(target: str, db: str = ""):
+async def get_schema(target: str, db: str = "", request: Request = None):
     """Return schema tree {db: {table: [cols]}} for any target."""
     conn = None
     is_pool = False
     try:
         conn, is_pool, label = await _adhoc_connect(
-            target, database=db or None)
+            target, database=db or None, request=request)
         if target == "admin":
             from .db import get_pool as _gp
-            pool = await _gp()
+            pool = await _gp(request)
             pool.release(conn)
             conn = None
             return await _schema_admin(pool)
@@ -659,7 +776,7 @@ async def get_schema(target: str, db: str = ""):
         if conn:
             if is_pool:
                 from .db import get_pool as _gp2
-                pool = await _gp2()
+                pool = await _gp2(request)
                 pool.release(conn)
             elif _is_pg_conn(conn):
                 await conn.close()
@@ -670,15 +787,15 @@ async def get_schema(target: str, db: str = ""):
 # ── Database list for a target ──────────────────────────────
 
 @app.get("/api/v1/databases/{target:path}")
-async def list_databases(target: str):
+async def list_databases(target: str, request: Request = None):
     """List databases for any target."""
     conn = None
     is_pool = False
     try:
-        conn, is_pool, _ = await _adhoc_connect(target)
+        conn, is_pool, _ = await _adhoc_connect(target, request=request)
         if target == "admin":
             from .db import get_pool as _gp
-            pool = await _gp()
+            pool = await _gp(request)
             pool.release(conn)
             conn = None
             async with pool.acquire() as c:
@@ -702,7 +819,7 @@ async def list_databases(target: str):
         if conn:
             if is_pool:
                 from .db import get_pool as _gp2
-                pool = await _gp2()
+                pool = await _gp2(request)
                 pool.release(conn)
             elif _is_pg_conn(conn):
                 await conn.close()
@@ -713,10 +830,10 @@ async def list_databases(target: str):
 # ── Available query targets (auto-discovered) ──────────────────
 
 @app.get("/api/v1/targets")
-async def list_targets():
+async def list_targets(request: Request):
     """Auto-discover query targets from ProxySQL state."""
     from .db import get_pool
-    pool = await get_pool()
+    pool = await get_pool(request)
 
     admin_port = os.environ.get("PROXYSQL_ADMIN_PORT", "6032")
     targets = [{"id": "admin", "label": f"Admin (:{admin_port})",

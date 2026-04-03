@@ -95,6 +95,14 @@ function displayName(table) {
 
 function proxui() {
   return {
+    // Auth
+    authenticated: false,
+    authUser: '',
+    loginUser: '',
+    loginPass: '',
+    loginError: '',
+    loginLoading: false,
+
     // View
     view: 'dashboard',  // 'dashboard' | 'tables' | 'query'
     statsRunning: true,
@@ -168,6 +176,11 @@ function proxui() {
     statsDigests: [],
     statsDigestsLimit: 10,
 
+    // Dashboard toggles
+    showMySQL: JSON.parse(localStorage.getItem('proxui-show-mysql') ?? 'true'),
+    showPgSQL: JSON.parse(localStorage.getItem('proxui-show-pgsql') ?? 'true'),
+    showClickHouse: JSON.parse(localStorage.getItem('proxui-show-clickhouse') ?? 'true'),
+
     // Toast & theme
     toast: '',
     darkMode: true,
@@ -175,6 +188,57 @@ function proxui() {
     async init() {
       this.darkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
+      // Check auth
+      try {
+        const res = await fetch(`${API}/auth/check`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated) {
+            this.authenticated = true;
+            this.authUser = data.user;
+            await this._initApp();
+          }
+        }
+      } catch (e) {}
+    },
+
+    async login() {
+      this.loginError = '';
+      this.loginLoading = true;
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: this.loginUser, password: this.loginPass }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          this.authenticated = true;
+          this.authUser = data.user;
+          this.loginPass = '';
+          await this._initApp();
+        } else {
+          this.loginError = data.error || 'Login failed';
+        }
+      } catch (e) {
+        this.loginError = 'Connection error';
+      } finally {
+        this.loginLoading = false;
+      }
+    },
+
+    async logout() {
+      try { await fetch(`${API}/auth/logout`, { method: 'POST' }); } catch (e) {}
+      this.authenticated = false;
+      this.authUser = '';
+      this.tables = {};
+      this.categories = [];
+      this.configModules = [];
+      this.configGroups = [];
+      this.stopStats();
+    },
+
+    async _initApp() {
       // Restore from URL hash: #view or #view/table
       this._restoreHash();
 
@@ -209,6 +273,8 @@ function proxui() {
       // Load config sync status
       this.loadConfigStatus();
 
+      // Start stats polling
+      this.startStats();
     },
 
     async loadConfigStatus() {
@@ -229,11 +295,13 @@ function proxui() {
       const groups = {
         'MySQL':  [],
         'PgSQL':  [],
+        'ClickHouse': [],
         'Admin':  [],
       };
       for (const m of this.configModules) {
         if (m.module.startsWith('mysql_')) groups['MySQL'].push(m);
         else if (m.module.startsWith('pgsql_')) groups['PgSQL'].push(m);
+        else if (m.module.startsWith('clickhouse_')) groups['ClickHouse'].push(m);
         else groups['Admin'].push(m);
       }
       this.configGroups = Object.entries(groups)
@@ -242,9 +310,9 @@ function proxui() {
     },
 
     configShortName(module) {
-      // Strip prefix: mysql_servers -> servers, admin_variables -> variables
       return module
-        .replace(/^mysql_/, '').replace(/^pgsql_/, '').replace(/^admin_/, '')
+        .replace(/^mysql_/, '').replace(/^pgsql_/, '')
+        .replace(/^clickhouse_/, '').replace(/^admin_/, '')
         .replace(/_/g, ' ');
     },
 
@@ -1001,6 +1069,11 @@ function proxui() {
     },
 
     // ── Toast & theme ───────────────────────────────────────────────────
+
+    persistDashToggle(key) {
+      const lsKey = 'proxui-show-' + key.replace('show', '').toLowerCase();
+      localStorage.setItem(lsKey, JSON.stringify(this[key]));
+    },
 
     showToast(msg) {
       this.toast = msg;
