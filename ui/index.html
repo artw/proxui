@@ -225,14 +225,17 @@
                     </template>
                   </div>
                   <button class="outline" @click="loadRows()" :aria-busy="loading"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>
-                  <button x-show="!tableMeta?.readonly" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
+                  <button x-show="!tableMeta?.readonly" class="outline" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
                   <template x-if="moduleForTable(currentTable)">
                     <div class="sync-actions">
-                      <button class="outline" @click="configAction(moduleForTable(currentTable), 'load_runtime')"
-                              :class="{'sync-warn-btn': isUnsaved(moduleForTable(currentTable))}">
-                        <i class="ph-bold ph-arrow-right"></i> Runtime</button>
-                      <button class="outline secondary" @click="configAction(moduleForTable(currentTable), 'save_disk')">
-                        <i class="ph-bold ph-floppy-disk"></i> Disk</button>
+                      <button class="outline"
+                              :disabled="!isUnsaved(moduleForTable(currentTable))"
+                              @click="configAction(moduleForTable(currentTable), 'load_runtime')">
+                        <i class="ph-bold ph-arrow-right"></i> Apply</button>
+                      <button class="outline"
+                              :disabled="!isDiskDirty(moduleForTable(currentTable))"
+                              @click="configAction(moduleForTable(currentTable), 'save_disk')">
+                        <i class="ph-bold ph-floppy-disk"></i> Save</button>
                     </div>
                   </template>
                 </div>
@@ -316,12 +319,19 @@
           <div class="config-diff-header">
             <h3><a href="#" @click.prevent="selectTable(activeConfigModule)" x-text="activeConfigModule"></a></h3>
             <div class="config-diff-actions">
-              <button class="outline" @click="configAction(activeConfigModule, 'load_runtime')"
-                      :disabled="activeConfigStatus?.memory_eq_runtime"><i class="ph-bold ph-arrow-right"></i> Load to Runtime</button>
-              <button class="outline" @click="configAction(activeConfigModule, 'save_disk')"
-                      :disabled="activeConfigStatus?.memory_eq_disk"><i class="ph-bold ph-floppy-disk"></i> Save to Disk</button>
-              <button class="outline secondary" @click="configAction(activeConfigModule, 'load_disk')"><i class="ph-bold ph-upload-simple"></i> Load from Disk</button>
-              <button class="outline secondary" @click="activeConfigModule = null"><i class="ph-bold ph-x"></i></button>
+              <button class="outline"
+                      :disabled="activeConfigStatus?.memory_eq_runtime"
+                      @click="configAction(activeConfigModule, 'load_runtime')">
+                <i class="ph-bold ph-arrow-right"></i> Apply</button>
+              <button class="outline"
+                      :disabled="activeConfigStatus?.memory_eq_disk"
+                      @click="configAction(activeConfigModule, 'save_disk')">
+                <i class="ph-bold ph-floppy-disk"></i> Save</button>
+              <button class="outline"
+                      @click="configAction(activeConfigModule, 'load_disk')">
+                <i class="ph-bold ph-upload-simple"></i> Revert</button>
+              <button class="outline" @click="activeConfigModule = null">
+                <i class="ph-bold ph-x"></i></button>
             </div>
           </div>
           <div class="config-diff-tables" x-show="activeConfigDiff?.diff_rows?.length > 0">

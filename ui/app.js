@@ -502,10 +502,15 @@ function proxui() {
     },
 
     isUnsaved(name) {
-      // Check if this config module/table has pending changes (memory != runtime)
       const mod = this.moduleForTable(name) || name;
       const m = this.configModules.find(m => m.module === mod);
       return m ? !m.memory_eq_runtime : false;
+    },
+
+    isDiskDirty(name) {
+      const mod = this.moduleForTable(name) || name;
+      const m = this.configModules.find(m => m.module === mod);
+      return m ? !m.memory_eq_disk : false;
     },
 
     get unsyncedGroups() {
