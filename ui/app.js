@@ -128,8 +128,6 @@ function proxui() {
     configModules: [],
     configGroups: [],
     configLoading: false,
-    activeConfigModule: null,
-    activeConfigDiff: null,
 
     // Table view
     currentTable: null,
@@ -335,27 +333,6 @@ function proxui() {
         .replace(/_/g, ' ');
     },
 
-    get activeConfigStatus() {
-      if (!this.activeConfigModule) return null;
-      return this.configModules.find(m => m.module === this.activeConfigModule);
-    },
-
-    async selectConfigModule(module) {
-      if (this.activeConfigModule === module) {
-        this.activeConfigModule = null;
-        this.activeConfigDiff = null;
-        return;
-      }
-      this.activeConfigModule = module;
-      this.activeConfigDiff = null;
-      try {
-        const res = await fetch(`${API}/config/diff/${encodeURIComponent(module)}`);
-        this.activeConfigDiff = await res.json();
-      } catch (e) {
-        this.activeConfigDiff = { columns: [], diff_rows: [] };
-      }
-    },
-
     async configAction(module, action) {
       try {
         const res = await fetch(`${API}/config/action`, {
@@ -367,9 +344,6 @@ function proxui() {
         if (data.ok) {
           this.showToast(`${data.command}`);
           await this.loadConfigStatus();
-          if (this.activeConfigModule === module) {
-            await this.selectConfigModule(module);
-          }
           if (this.currentTable) await this.loadRows();
         } else {
           this.showToast('Error: ' + data.error);

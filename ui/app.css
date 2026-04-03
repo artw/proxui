@@ -412,15 +412,6 @@ a {
   background: var(--pico-card-background-color);
 }
 
-.config-bottom .config-diff {
-  margin: 0;
-  border-radius: 0;
-  border: none;
-  border-bottom: 1px solid var(--pico-muted-border-color);
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
 .config-bar {
   display: flex;
   flex-wrap: wrap;
@@ -431,9 +422,6 @@ a {
 }
 
 .config-group       { display: flex; align-items: center; gap: 0.25rem; }
-.config-group-label { font-weight: 600; font-size: var(--fs-xs);
-                      text-transform: uppercase; letter-spacing: 0.04em;
-                      color: var(--pico-muted-color); margin-right: 0.1rem; }
 
 .config-pill {
   margin: 0;
@@ -448,8 +436,6 @@ a {
   line-height: 1.4;
 }
 
-.config-pill.sync-ok   { border-color: var(--pico-ins-color);
-                         color: var(--pico-ins-color); opacity: 0.5; }
 .config-pill.sync-warn { border-color: var(--pico-mark-background-color);
                          color: var(--pico-mark-color);
                          background: color-mix(in srgb, var(--pico-mark-background-color) 15%, transparent);
@@ -458,11 +444,13 @@ a {
                          color: var(--pico-primary-inverse);
                          border-color: var(--pico-primary-background); }
 .config-pill:hover     { opacity: 1; }
-.pill-badge            { font-size: var(--fs-xs); }
 
-.config-refresh {
-  margin: 0 0 0 auto;
-  padding: 0.2rem 0.5rem;
+.config-bar-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--pico-mark-color);
+  margin-right: 0.3rem;
+  white-space: nowrap;
 }
 
 .sync-actions {
@@ -472,29 +460,6 @@ a {
   padding-left: 0.5rem;
   border-left: 1px solid var(--pico-muted-border-color);
 }
-
-/* Config diff panel */
-.config-diff {
-  padding: 0.75rem 1rem;
-  background: var(--pico-card-background-color);
-}
-
-.config-diff-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
-
-.config-diff-header h3     { margin: 0; font-size: var(--fs-lg); }
-
-
-.config-diff-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
-
-.config-diff-tables .diff-memory td  { background: color-mix(in srgb, var(--pico-del-color) 8%, transparent); }
-.config-diff-tables .diff-runtime td { background: color-mix(in srgb, var(--pico-ins-color) 8%, transparent); }
-.diff-changed { font-weight: 700; }
 
 /* ── Table header ──────────────────────────────────────────────────── */
 

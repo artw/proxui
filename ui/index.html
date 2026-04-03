@@ -346,74 +346,21 @@
         </main>
       </div>
 
-      <!-- Config sync bottom bar (only when something is out of sync) -->
+      <!-- Unsaved changes bottom bar -->
       <div class="config-bottom" x-show="configModules.some(m => !m.in_sync && !m.error)">
-        <!-- Diff panel (expands above the bar) -->
-        <div class="config-diff" x-show="activeConfigModule && activeConfigDiff">
-          <div class="config-diff-header">
-            <h3><a href="#" @click.prevent="selectTable(activeConfigModule)" x-text="activeConfigModule"></a></h3>
-            <div class="config-diff-actions">
-              <button class="outline"
-                      :disabled="activeConfigStatus?.memory_eq_runtime"
-                      @click="configAction(activeConfigModule, 'load_runtime')">
-                <i class="ph-bold ph-arrow-right"></i> Apply</button>
-              <button class="outline"
-                      :disabled="activeConfigStatus?.memory_eq_disk"
-                      @click="configAction(activeConfigModule, 'save_disk')">
-                <i class="ph-bold ph-floppy-disk"></i> Save</button>
-              <button class="outline"
-                      @click="configAction(activeConfigModule, 'load_disk')">
-                <i class="ph-bold ph-upload-simple"></i> Revert</button>
-              <button class="outline" @click="activeConfigModule = null">
-                <i class="ph-bold ph-x"></i></button>
-            </div>
-          </div>
-          <div class="config-diff-tables" x-show="activeConfigDiff?.diff_rows?.length > 0">
-            <div class="table-wrap">
-              <table class="striped">
-                <thead>
-                  <tr>
-                    <th>Layer</th>
-                    <template x-for="col in activeConfigDiff?.columns || []" :key="col">
-                      <th x-text="col"></th>
-                    </template>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template x-for="(dr, idx) in activeConfigDiff?.diff_rows || []" :key="idx">
-                    <template x-for="layer in ['memory', 'runtime']" :key="layer">
-                      <tr :class="'diff-' + layer" x-show="dr[layer]">
-                        <td><strong x-text="layer"></strong></td>
-                        <template x-for="col in activeConfigDiff.columns" :key="col">
-                          <td :class="{'diff-changed': dr.changed_cols?.includes(col)}"
-                              x-text="dr[layer]?.[col] ?? ''"></td>
-                        </template>
-                      </tr>
-                    </template>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sync pills (out-of-sync only) -->
         <div class="config-bar">
+          <span class="config-bar-label"><i class="ph-bold ph-warning"></i> Unsaved changes</span>
           <template x-for="g in unsyncedGroups" :key="g.label">
             <div class="config-group">
-              <span class="config-group-label" x-text="g.label"></span>
               <template x-for="m in g.modules" :key="m.module">
                 <button class="config-pill sync-warn"
-                        :class="{'selected': activeConfigModule === m.module}"
-                        @click="selectConfigModule(m.module)">
+                        :class="{'selected': currentTable === m.module || moduleForTable(currentTable) === m.module}"
+                        @click="selectTable(m.module)">
                   <span x-text="configShortName(m.module)"></span>
-                  <i class="ph-bold ph-warning"></i>
                 </button>
               </template>
             </div>
           </template>
-          <button class="outline config-refresh" @click="loadConfigStatus()"
-                  :aria-busy="configLoading"><i class="ph-bold ph-arrows-clockwise"></i></button>
         </div>
       </div>
       </div>
