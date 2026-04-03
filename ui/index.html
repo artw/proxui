@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>proxui — ProxySQL Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/theme/material-darker.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/addon/hint/show-hint.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/bold/style.css">
+  <link rel="stylesheet" href="/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5/mode/sql/sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5/addon/hint/show-hint.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5/addon/hint/sql-hint.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <script src="/app.js"></script>
+</head>
+<body x-data="proxui()" x-init="init()">
+
+  <!-- Top nav -->
+  <nav class="topnav">
+    <ul>
+      <li><strong><i class="ph-bold ph-lightning"></i> proxui</strong></li>
+      <li>
+        <a href="#" @click.prevent="toggleStats()" class="stats-toggle"
+           :data-tooltip="statsRunning ? 'Pause polling' : 'Resume polling'"
+           data-placement="bottom">
+          <i :class="statsRunning ? 'ph-bold ph-pause' : 'ph-bold ph-play'"></i>
+        </a>
+      </li>
+      <li>
+        <a href="#" @click.prevent="setView('dashboard')"
+           :class="{'active-tab': view === 'dashboard'}"><i class="ph-bold ph-gauge"></i> Dashboard</a>
+      </li>
+      <li>
+        <a href="#" @click.prevent="setView('tables')"
+           :class="{'active-tab': view === 'tables'}"><i class="ph-bold ph-table"></i> Tables</a>
+      </li>
+      <li>
+        <a href="#" @click.prevent="setView('query')"
+           :class="{'active-tab': view === 'query'}"><i class="ph-bold ph-terminal"></i> Query</a>
+      </li>
+    </ul>
+    <ul class="nav-center">
+      <li>
+        <input type="search" placeholder="Filter…"
+               x-model="search" @input="filterTables(); filterSchemaTree()"
+               class="nav-filter"
+               x-show="view === 'tables' || view === 'query'">
+      </li>
+    </ul>
+    <ul>
+      <li>
+        <a href="#" @click.prevent="toggleTheme()" data-tooltip="Toggle theme">
+          <i :class="darkMode ? 'ph-bold ph-sun' : 'ph-bold ph-moon'"></i>
+        </a>
+      </li>
+      <li><a href="/api/docs" data-tooltip="Swagger API docs"><i class="ph-bold ph-file-text"></i> API</a></li>
+    </ul>
+  </nav>
+
+  <div class="layout">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <main class="content" x-show="view === 'dashboard'" x-init="startStats();">
+        <!-- Config sync bar -->
+        <div class="config-bar" x-show="configGroups.length > 0">
+          <template x-for="g in configGroups" :key="g.label">
+            <div class="config-group">
+              <span class="config-group-label" x-text="g.label"></span>
+              <template x-for="m in g.modules" :key="m.module">
+                <button class="config-pill"
+                        :class="{
+                          'sync-ok': m.in_sync,
+                          'sync-warn': !m.in_sync,
+                          'selected': activeConfigModule === m.module
+                        }"
+                        @click="selectConfigModule(m.module)">
+                  <span x-text="configShortName(m.module)"></span>
+                  <span x-show="!m.in_sync" class="pill-badge">•</span>
+                </button>
+              </template>
+            </div>
+          </template>
+          <button class="outline config-refresh" @click="loadConfigStatus()"
+                  :aria-busy="configLoading"><i class="ph-bold ph-arrows-clockwise"></i></button>
+        </div>
+
+        <!-- Config diff panel -->
+        <div class="config-diff" x-show="activeConfigModule && activeConfigDiff">
+          <div class="config-diff-header">
+            <h3><a href="#" @click.prevent="goToTable(activeConfigModule)" x-text="activeConfigModule"></a></h3>
+            <div class="config-diff-actions">
+              <button class="outline" @click="configAction(activeConfigModule, 'load_runtime')"
+                      :disabled="activeConfigStatus?.memory_eq_runtime"><i class="ph-bold ph-arrow-right"></i> Load to Runtime</button>
+              <button class="outline" @click="configAction(activeConfigModule, 'save_disk')"
+                      :disabled="activeConfigStatus?.memory_eq_disk"><i class="ph-bold ph-floppy-disk"></i> Save to Disk</button>
+              <button class="outline secondary" @click="configAction(activeConfigModule, 'load_disk')"><i class="ph-bold ph-upload-simple"></i> Load from Disk</button>
+              <button class="outline secondary" @click="activeConfigModule = null"><i class="ph-bold ph-x"></i></button>
+            </div>
+          </div>
+          <div class="config-diff-tables" x-show="activeConfigDiff?.diff_rows?.length > 0">
+            <div class="table-wrap">
+              <table class="striped">
+                <thead>
+                  <tr>
+                    <th>Layer</th>
+                    <template x-for="col in activeConfigDiff?.columns || []" :key="col">
+                      <th x-text="col"></th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(dr, idx) in activeConfigDiff?.diff_rows || []" :key="idx">
+                    <template x-for="layer in ['memory', 'runtime']" :key="layer">
+                      <tr :class="'diff-' + layer" x-show="dr[layer]">
+                        <td><strong x-text="layer"></strong></td>
+                        <template x-for="col in activeConfigDiff.columns" :key="col">
+                          <td :class="{'diff-changed': dr.changed_cols?.includes(col)}"
+                              x-text="dr[layer]?.[col] ?? ''"></td>
+                        </template>
+                      </tr>
+                    </template>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats charts -->
+        <div class="stats-grid">
+          <div class="chart-card">
+            <h4>Connections</h4>
+            <div id="chart-connections"></div>
+          </div>
+          <div class="chart-card">
+            <h4>Queries / sec</h4>
+            <div id="chart-qps"></div>
+          </div>
+          <div class="chart-card">
+            <h4>Connection Pool</h4>
+            <div id="chart-pool"></div>
+          </div>
+          <div class="chart-card">
+            <h4>Memory</h4>
+            <div id="chart-memory"></div>
+          </div>
+        </div>
+
+        <!-- Command latency + top queries -->
+        <div class="stats-grid">
+          <div class="chart-card wide">
+            <div class="chart-card-header">
+              <h4>Command Counters</h4>
+              <div class="page-sizes">
+                <template x-for="n in [10,25,50,100,0]" :key="n">
+                  <button :class="{'selected': statsCmdsLimit === n}" @click="statsCmdsLimit = n" x-text="n === 0 ? 'All' : n"></button>
+                </template>
+              </div>
+            </div>
+            <div class="table-wrap" x-show="statsCmds.length > 0">
+              <table class="striped">
+                <thead><tr><th>Command</th><th>Count</th><th>Total time</th><th>Avg (ms)</th></tr></thead>
+                <tbody>
+                  <template x-for="c in (statsCmdsLimit ? statsCmds.slice(0, statsCmdsLimit) : statsCmds)" :key="c.cmd">
+                    <tr>
+                      <td x-text="c.cmd"></td>
+                      <td x-text="c.cnt"></td>
+                      <td x-text="c.total"></td>
+                      <td x-text="c.avg"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-card-header">
+              <h4>Top Query Digests</h4>
+              <div class="page-sizes">
+                <template x-for="n in [10,25,50,100,0]" :key="n">
+                  <button :class="{'selected': statsDigestsLimit === n}" @click="statsDigestsLimit = n" x-text="n === 0 ? 'All' : n"></button>
+                </template>
+              </div>
+            </div>
+            <div class="table-wrap" x-show="statsDigests.length > 0">
+              <table class="striped">
+                <thead><tr><th>HG</th><th>Schema</th><th>Digest</th><th>Count</th><th>Total (ms)</th><th>Avg (ms)</th></tr></thead>
+                <tbody>
+                  <template x-for="d in (statsDigestsLimit ? statsDigests.slice(0, statsDigestsLimit) : statsDigests)" :key="d.digest">
+                    <tr>
+                      <td x-text="d.hg"></td>
+                      <td x-text="d.schema"></td>
+                      <td><span class="cell-value" x-text="d.text"></span></td>
+                      <td x-text="d.cnt"></td>
+                      <td x-text="d.total"></td>
+                      <td x-text="d.avg"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+    </main>
+
+    <!-- ═══ TABLES VIEW ═══ -->
+    <template x-if="view === 'tables'">
+      <div class="layout-inner">
+        <aside class="sidebar" :style="'width:' + sidebarWidth + 'px'">
+          <template x-for="cat in filteredCategories" :key="cat.name">
+            <details :open="cat.name === activeCategory">
+              <summary x-text="cat.label + ' (' + cat.tables.length + ')'"></summary>
+              <ul>
+                <template x-for="t in cat.tables" :key="t">
+                  <li>
+                    <a href="#" @click.prevent="selectTable(t)"
+                       :class="{'active': t === currentTable}">
+                      <span x-text="displayName(t)"></span>
+                      <span class="table-desc" x-text="tableDesc(t)" x-show="tableDesc(t)"></span>
+                    </a>
+                  </li>
+                </template>
+              </ul>
+            </details>
+          </template>
+        </aside>
+
+        <div class="resize-handle" :class="{'dragging': resizing}"
+             @mousedown.prevent="startResize($event)"></div>
+
+        <main class="content">
+          <template x-if="!currentTable">
+            <p class="empty-state">Select a table from the sidebar.</p>
+          </template>
+
+          <template x-if="currentTable">
+            <div>
+              <div class="table-header">
+                <hgroup>
+                  <h2 x-text="currentTable"></h2>
+                  <p>
+                    <span x-show="tableMeta?.readonly" class="badge readonly">read-only</span>
+                    <span x-show="!tableMeta?.readonly" class="badge writable">writable</span>
+                    <span x-text="sortedRows.length + (sortedRows.length !== filteredRows.length ? '/' + filteredRows.length : '') + (filteredRows.length !== rows.length ? ' (of ' + rows.length + ')' : '') + ' rows'"></span>
+
+                  </p>
+                  <p class="table-desc-line" x-show="tableDesc(currentTable)"
+                     x-text="tableDesc(currentTable)"></p>
+                </hgroup>
+                <div class="table-actions">
+                  <div class="page-sizes">
+                    <template x-for="n in [10,25,50,100,0]" :key="n">
+                      <button :class="{'selected': rowLimit === n}" @click="rowLimit = n" x-text="n === 0 ? 'All' : n"></button>
+                    </template>
+                  </div>
+                  <button class="outline" @click="loadRows()" :aria-busy="loading"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>
+                  <button x-show="!tableMeta?.readonly" @click="openCreateForm()"><i class="ph-bold ph-plus"></i> Add row</button>
+                </div>
+              </div>
+
+              <article x-show="loading" aria-busy="true">Loading…</article>
+              <article x-show="error" class="error-box"><p x-text="error"></p></article>
+
+              <div class="table-wrap" x-show="!loading && rows.length > 0">
+                <table class="striped">
+                  <thead>
+                    <tr>
+                      <template x-for="col in columns" :key="col">
+                        <th :class="{'sorted': sortCol === col}">
+                          <div class="th-inner">
+                            <span @click="sortBy(col)" class="th-label" x-text="col"></span>
+                            <span class="th-icons">
+                              <i class="ph-bold ph-funnel th-funnel"
+                                 :class="{'active': colFilters[col]}"
+                                 @click.stop="openColFilter(col, $event)"></i>
+                              <i class="ph-bold ph-x th-filter-clear"
+                                 x-show="colFilters[col]"
+                                 @click.stop="colFilters[col] = ''; colFilterOpen = null"></i>
+                            </span>
+
+                          </div>
+                        </th>
+                      </template>
+                      <th x-show="!tableMeta?.readonly">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="(row, idx) in sortedRows" :key="idx">
+                      <tr>
+                        <template x-for="col in columns" :key="col">
+                          <td>
+                            <span x-show="!isPasswordCol(col)" x-text="row[col] ?? ''" class="cell-value"></span>
+                            <span x-show="isPasswordCol(col)" class="cell-value masked"
+                                  @click="$el.classList.toggle('masked')"
+                                  x-text="row[col] ?? ''"></span>
+                          </td>
+                        </template>
+                        <td x-show="!tableMeta?.readonly">
+                          <div class="row-actions">
+                            <a href="#" @click.prevent="openEditForm(row)" class="contrast"><i class="ph-bold ph-pencil-simple"></i></a>
+                            <a href="#" @click.prevent="deleteRow(row)" class="contrast"><i class="ph-bold ph-trash"></i></a>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <p x-show="!loading && rows.length === 0 && !error" class="empty-state">No rows found.</p>
+            </div>
+          </template>
+        </main>
+      </div>
+    </template>
+
+    <!-- ═══ QUERY VIEW ═══ -->
+    <template x-if="view === 'query'">
+      <div class="layout-inner">
+        <aside class="sidebar schema-sidebar" :style="'width:' + sidebarWidth + 'px'">
+          <div x-show="schemaLoading" style="padding:0.5rem" aria-busy="true">Loading…</div>
+          <div class="schema-tree" x-show="!schemaLoading">
+            <template x-for="db in filteredSchemaKeys" :key="db">
+              <details :open="search.length > 0">
+                <summary class="schema-db" x-text="db"></summary>
+                <template x-for="tbl in filteredSchemaTables(db)" :key="tbl">
+                  <details class="schema-tbl-details">
+                    <summary class="schema-tbl">
+                      <span x-text="tbl" @click.stop="insertTableRef(db, tbl)" class="schema-tbl-name"></span>
+                    </summary>
+                    <ul class="schema-cols">
+                      <template x-for="col in schemaTree[db][tbl]" :key="col.name">
+                        <li @click="insertColRef(col.name)" class="schema-col">
+                          <span x-text="col.name" :class="{'schema-pk': col.pk}"></span>
+                          <small x-text="col.type" class="schema-col-type"></small>
+                        </li>
+                      </template>
+                    </ul>
+                  </details>
+                </template>
+              </details>
+            </template>
+          </div>
+        </aside>
+
+        <div class="resize-handle" :class="{'dragging': resizing}"
+             @mousedown.prevent="startResize($event)"></div>
+
+        <main class="content query-view">
+          <div class="query-toolbar">
+            <img x-show="targetIconSrc(queryTarget)" :src="targetIconSrc(queryTarget)" class="target-logo">
+            <i x-show="!targetIconSrc(queryTarget)" class="ph-bold" :class="targetIconClass(queryTarget)"></i>
+            <select x-model="queryTarget" @change="onTargetChange()" style="width:auto; margin:0">
+              <template x-for="t in queryTargets" :key="t.id">
+                <option :value="t.id" x-text="t.label"></option>
+              </template>
+            </select>
+            <select x-model="queryDb" style="width:auto; margin:0" x-show="schemaDbs.length > 0">
+              <option value="">(no db)</option>
+              <template x-for="db in schemaDbs" :key="db">
+                <option :value="db" x-text="db"></option>
+              </template>
+            </select>
+            <button @click="runQuery()" :aria-busy="queryRunning">
+              <i class="ph-bold ph-play"></i> Run <small>(Ctrl+Enter)</small>
+            </button>
+            <span class="query-info" x-show="queryResult && queryResult.ok"
+                  x-text="queryResult.row_count + ' rows · ' + queryResult.elapsed_ms + ' ms'
+                          + (queryResult.truncated ? ' (truncated)' : '')">
+            </span>
+            <span class="query-info error-text" x-show="queryResult && !queryResult.ok"
+                  x-text="queryResult?.error"></span>
+          </div>
+          <div class="query-editor" id="query-editor"></div>
+          <div class="query-results" x-show="queryResult && queryResult.ok && queryResult.columns.length > 0">
+            <div class="table-wrap">
+              <table class="striped">
+                <thead>
+                  <tr>
+                    <template x-for="col in queryResult?.columns || []" :key="col">
+                      <th x-text="col"></th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(row, idx) in queryResult?.rows || []" :key="idx">
+                    <tr>
+                      <template x-for="col in queryResult.columns" :key="col">
+                        <td><span x-text="row[col] ?? ''" class="cell-value"></span></td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="query-results" x-show="queryResult && queryResult.ok && queryResult.affected_rows !== undefined">
+            <p x-text="'Statement OK, ' + queryResult.affected_rows + ' rows affected · ' + queryResult.elapsed_ms + ' ms'"></p>
+          </div>
+        </main>
+      </div>
+    </template>
+  </div>
+
+  <!-- Floating column filter -->
+  <div class="col-filter-popup" x-show="colFilterOpen"
+       :style="colFilterStyle"
+       @click.outside="colFilterOpen = null"
+       @keydown.escape.window="colFilterOpen = null">
+    <input type="text" x-ref="colFilterInput"
+           :placeholder="'filter ' + (colFilterOpen || '')"
+           :value="colFilters[colFilterOpen] || ''"
+           @input.debounce.200ms="colFilters[colFilterOpen] = $event.target.value"
+           @keydown.enter="colFilterOpen = null"
+           @keydown.escape="colFilterOpen = null">
+  </div>
+
+  <!-- Create/Edit modal (global) -->
+  <dialog :open="showForm" @close="showForm = false">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" @click="showForm = false"></button>
+        <h3 x-text="editMode ? 'Edit row' : 'Add row'"></h3>
+      </header>
+      <form @submit.prevent="saveRow()">
+        <template x-for="field in formFields" :key="field.name">
+          <label>
+            <span x-text="field.name"></span>
+            <span x-show="field.pk" class="badge pk">PK</span>
+            <input
+              :type="isPasswordCol(field.name) ? 'password' : (field.type === 'int' || field.type === 'float' ? 'number' : 'text')"
+              :step="field.type === 'float' ? 'any' : undefined"
+              :name="field.name"
+              :placeholder="field.default !== null ? 'default: ' + field.default : ''"
+              :required="!field.nullable && field.default === null && !field.autoincrement"
+              :disabled="editMode && field.pk"
+              x-model="formData[field.name]"
+            >
+          </label>
+        </template>
+        <footer>
+          <button type="button" class="secondary" @click="showForm = false">Cancel</button>
+          <button type="submit" :aria-busy="saving">
+            <span x-text="editMode ? 'Save' : 'Create'"></span>
+          </button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <div class="toast" x-show="toast" x-transition x-text="toast" @click="toast = ''"></div>
+</body>
+</html>
