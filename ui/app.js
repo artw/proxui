@@ -294,13 +294,15 @@ function proxui() {
     buildConfigGroups() {
       const groups = {
         'MySQL':  [],
-        'PgSQL':  [],
+        'PostgreSQL':  [],
         'ClickHouse': [],
+        'ProxySQL': [],
         'Admin':  [],
       };
       for (const m of this.configModules) {
         if (m.module.startsWith('mysql_')) groups['MySQL'].push(m);
-        else if (m.module.startsWith('pgsql_')) groups['PgSQL'].push(m);
+        else if (m.module.startsWith('pgsql_')) groups['PostgreSQL'].push(m);
+        else if (m.module.startsWith('proxysql_')) groups['ProxySQL'].push(m);
         else if (m.module.startsWith('clickhouse_')) groups['ClickHouse'].push(m);
         else groups['Admin'].push(m);
       }
@@ -422,6 +424,7 @@ function proxui() {
     buildCategories() {
       const cats = {};
       for (const name of Object.keys(this.tables)) {
+        if (name.startsWith('runtime_')) continue; // hidden — use sync bar
         const cat = this.categorize(name);
         if (!cats[cat]) cats[cat] = [];
         cats[cat].push(name);
@@ -429,8 +432,12 @@ function proxui() {
       for (const c of Object.values(cats)) c.sort();
 
       const order = [
-        'mysql', 'pgsql', 'clickhouse', 'genai', 'mcp',
-        'config', 'proxysql', 'runtime', 'stats', 'other'
+        'mysql', 'mysql_stats',
+        'pgsql', 'pgsql_stats',
+        'clickhouse',
+        'proxysql', 'proxysql_stats',
+        'genai', 'mcp', 'mcp_stats',
+        'config', 'stats', 'other'
       ];
       this.categories = order
         .filter(k => cats[k])
@@ -438,24 +445,30 @@ function proxui() {
     },
 
     categorize(name) {
-      const meta = this.tables[name];
-      if (name.startsWith('stats_')) return 'stats';
-      if (name.startsWith('runtime_')) return 'runtime';
-      if (!meta.readonly) {
-        for (const pfx of ['mysql_', 'pgsql_', 'clickhouse_', 'proxysql_', 'genai_', 'mcp_']) {
-          if (name.startsWith(pfx)) return pfx.replace('_', '');
-        }
-        return 'config';
+      for (const pfx of ['mysql', 'pgsql', 'clickhouse', 'proxysql', 'genai', 'mcp']) {
+        if (name.startsWith('stats_') && name.includes(pfx)) return pfx + '_stats';
+        if (name.startsWith(pfx + '_') && !this.tables[name]?.readonly) return pfx;
       }
+      if (name.startsWith('stats_')) return 'stats';
+      if (!this.tables[name]?.readonly) return 'config';
       return 'other';
     },
 
     catLabel(cat) {
       return {
-        config: 'Config', mysql: 'MySQL', pgsql: 'PostgreSQL',
-        clickhouse: 'ClickHouse', genai: 'GenAI', mcp: 'MCP',
-        proxysql: 'ProxySQL', runtime: 'Runtime', stats: 'Stats', other: 'Other',
+        mysql: 'MySQL', mysql_stats: 'MySQL Stats',
+        pgsql: 'PostgreSQL', pgsql_stats: 'PostgreSQL Stats',
+        clickhouse: 'ClickHouse',
+        proxysql: 'ProxySQL', proxysql_stats: 'ProxySQL Stats',
+        genai: 'GenAI', mcp: 'MCP', mcp_stats: 'MCP Stats',
+        config: 'Config', stats: 'Stats', other: 'Other',
       }[cat] || cat;
+    },
+
+    isUnsaved(name) {
+      // Check if this config table has pending changes (memory != runtime)
+      const m = this.configModules.find(m => m.module === name);
+      return m ? !m.memory_eq_runtime : false;
     },
 
     _fuzzyMatch(text, query) {

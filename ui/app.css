@@ -217,11 +217,21 @@ a {
   left: 0; right: 0; bottom: 0;
 }
 
+.tables-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .layout-inner {
   display: flex;
   flex: 1;
   height: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Sidebar ───────────────────────────────────────────────────────── */
@@ -272,6 +282,8 @@ a {
 .sidebar ul li a:hover  { background: var(--pico-primary-focus); }
 .sidebar ul li a.active  { background: var(--pico-primary-background);
                            color: var(--pico-primary-inverse); font-weight: 600; }
+.sidebar ul li a.unsaved { border-left: 3px solid var(--pico-mark-background-color); }
+.unsaved-dot { color: var(--pico-mark-background-color); font-weight: bold; margin-left: auto; }
 
 .sidebar ul li a .table-desc {
   display: block;
@@ -363,15 +375,30 @@ a {
 
 /* ── Config sync bar ───────────────────────────────────────────────── */
 
+/* Config bottom bar (sticky in tables view) */
+.config-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  border-top: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+}
+
+.config-bottom .config-diff {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
 .config-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
   padding: 0.4rem 0.6rem;
-  border: 1px solid var(--pico-muted-border-color);
-  border-radius: 6px;
   background: var(--pico-card-background-color);
 }
 
@@ -412,10 +439,7 @@ a {
 
 /* Config diff panel */
 .config-diff {
-  margin-bottom: 1.5rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--pico-muted-border-color);
-  border-radius: 6px;
   background: var(--pico-card-background-color);
 }
 
