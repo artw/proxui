@@ -116,6 +116,8 @@ function proxui() {
 
     // Sidebar resize
     sidebarWidth: parseInt(localStorage.getItem('proxui-sidebar') || '260'),
+    sidebarCollapsed: false,
+    _savedSidebarWidth: 260,
     resizing: false,
 
     // Overview
@@ -669,6 +671,18 @@ function proxui() {
     },
 
     // ── Sidebar resize ──────────────────────────────────────────────────
+
+    toggleSidebar() {
+      if (this.sidebarCollapsed) {
+        this.sidebarWidth = this._savedSidebarWidth;
+        this.sidebarCollapsed = false;
+      } else {
+        this._savedSidebarWidth = this.sidebarWidth;
+        this.sidebarWidth = 0;
+        this.sidebarCollapsed = true;
+      }
+      localStorage.setItem('proxui-sidebar', String(this.sidebarWidth));
+    },
 
     startResize(e) {
       this.resizing = true;

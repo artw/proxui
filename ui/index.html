@@ -171,7 +171,7 @@
     <template x-if="view === 'tables'">
       <div class="tables-wrapper">
       <div class="layout-inner">
-        <aside class="sidebar" :style="'width:' + sidebarWidth + 'px'">
+        <aside class="sidebar" :style="'width:' + sidebarWidth + 'px'" x-show="!sidebarCollapsed">
           <template x-for="cat in filteredCategories" :key="cat.name">
             <details :id="'cat-' + cat.name">
               <summary x-text="cat.label + ' (' + cat.tables.length + ')'"></summary>
@@ -191,10 +191,15 @@
           </template>
         </aside>
 
-        <div class="resize-handle" :class="{'dragging': resizing}"
-             @mousedown.prevent="startResize($event)"></div>
+        <div class="resize-bar">
+          <button class="sidebar-toggle" @click="toggleSidebar()" :data-tooltip="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'" data-placement="right">
+            <i :class="sidebarCollapsed ? 'ph-bold ph-caret-right' : 'ph-bold ph-caret-left'"></i>
+          </button>
+          <div class="resize-handle" :class="{'dragging': resizing}"
+               @mousedown.prevent="startResize($event)" x-show="!sidebarCollapsed"></div>
+        </div>
 
-        <main class="content">
+        <main class="content" :class="{'no-scroll': currentTable}">
           <template x-if="!currentTable">
             <p class="empty-state">Select a table from the sidebar.</p>
           </template>
@@ -373,7 +378,7 @@
     <!-- ═══ QUERY VIEW ═══ -->
     <template x-if="view === 'query'">
       <div class="layout-inner">
-        <aside class="sidebar schema-sidebar" :style="'width:' + sidebarWidth + 'px'">
+        <aside class="sidebar schema-sidebar" :style="'width:' + sidebarWidth + 'px'" x-show="!sidebarCollapsed">
           <div x-show="schemaLoading" style="padding:0.5rem" aria-busy="true">Loading…</div>
           <div class="schema-tree" x-show="!schemaLoading">
             <template x-for="db in filteredSchemaKeys" :key="db">
@@ -399,8 +404,13 @@
           </div>
         </aside>
 
-        <div class="resize-handle" :class="{'dragging': resizing}"
-             @mousedown.prevent="startResize($event)"></div>
+        <div class="resize-bar">
+          <button class="sidebar-toggle" @click="toggleSidebar()">
+            <i :class="sidebarCollapsed ? 'ph-bold ph-caret-right' : 'ph-bold ph-caret-left'"></i>
+          </button>
+          <div class="resize-handle" :class="{'dragging': resizing}"
+               @mousedown.prevent="startResize($event)" x-show="!sidebarCollapsed"></div>
+        </div>
 
         <main class="content query-view">
           <div class="query-toolbar">

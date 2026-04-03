@@ -249,17 +249,43 @@ a {
   flex-shrink: 0;
 }
 
-.resize-handle {
-  width: 4px;
-  cursor: col-resize;
-  background: var(--pico-muted-border-color);
-  transition: background 0.15s;
+.resize-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   flex-shrink: 0;
+  width: 18px;
+  background: var(--pico-background-color);
+  border-left: 1px solid var(--pico-muted-border-color);
+  border-right: 1px solid var(--pico-muted-border-color);
+}
+
+.sidebar-toggle {
+  margin: 0;
+  padding: 0.3rem 0;
+  background: none;
+  border: none;
+  color: var(--pico-muted-color);
+  cursor: pointer;
+  font-size: 0.8em;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  color: var(--pico-primary);
+}
+
+.resize-handle {
+  flex: 1;
+  width: 100%;
+  cursor: col-resize;
+  transition: background 0.15s;
 }
 
 .resize-handle:hover,
 .resize-handle.dragging {
   background: var(--pico-primary);
+  opacity: 0.4;
 }
 
 .sidebar details           { margin-bottom: 0; border: none; }
@@ -304,12 +330,15 @@ a {
 
 .content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
   padding: 1.5rem 2rem;
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.content.no-scroll {
+  overflow: hidden;
 }
 
 /* Stats grid */
@@ -484,7 +513,11 @@ a {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
+  /* Fill content area exactly — no growing beyond */
+  max-height: 100%;
+  max-width: 100%;
 }
 
 .table-header {
