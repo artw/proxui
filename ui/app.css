@@ -717,14 +717,17 @@ a {
 
 .diff-indicator,
 .diff-indicator-th {
-  width: 1.2rem;
-  min-width: 1.2rem;
-  max-width: 1.2rem;
+  width: 1.5rem;
+  min-width: 1.5rem;
+  max-width: 1.5rem;
   text-align: center;
-  padding: 0 !important;
-  font-weight: 700;
-  font-size: var(--fs-base);
-  font-family: monospace;
+  padding: 0.2rem !important;
+  cursor: help;
+}
+
+.diff-indicator i,
+.diff-indicator-th i {
+  font-size: 0.9em;
 }
 
 .diff-add  { color: var(--pico-ins-color); }

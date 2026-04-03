@@ -252,8 +252,9 @@
                 <table class="striped">
                   <thead>
                     <tr>
-                      <th x-show="showDiffs" class="diff-indicator-th">
-                        <span title="+ new in memory&#10;~ changed vs runtime&#10;− only in runtime" style="cursor:help">Δ</span>
+                      <th x-show="showDiffs" class="diff-indicator-th"
+                          title="memory vs runtime diff">
+                        <i class="ph-bold ph-question" style="cursor:help"></i>
                       </th>
                       <template x-for="col in columns" :key="col">
                         <th :class="{'sorted': sortCol === col}"
@@ -287,9 +288,10 @@
                             'diff-row-changed': showDiffs && getRowDiff(row),
                             'row-pending-delete': isMarkedForDelete(row)
                           }">
-                        <td x-show="showDiffs" class="diff-indicator">
-                          <span x-show="getRowDiff(row) && getRowDiff(row).runtime" class="diff-mod">~</span>
-                          <span x-show="getRowDiff(row) && !getRowDiff(row).runtime" class="diff-add">+</span>
+                        <td x-show="showDiffs" class="diff-indicator"
+                            :title="getRowDiff(row) ? (getRowDiff(row).runtime ? 'changed vs runtime' : 'new — not in runtime') : ''">
+                          <i x-show="getRowDiff(row) && getRowDiff(row).runtime" class="ph-bold ph-pencil-simple-line diff-mod"></i>
+                          <i x-show="getRowDiff(row) && !getRowDiff(row).runtime" class="ph-bold ph-plus-circle diff-add"></i>
                         </td>
                         <template x-for="col in columns" :key="col">
                           <td :class="{
@@ -332,7 +334,7 @@
                       <!-- Runtime diff row (shown below changed memory row) -->
                       <template x-if="showDiffs && getRowDiff(row)?.runtime">
                         <tr class="diff-row-runtime">
-                          <td class="diff-indicator"><span class="diff-mod">~</span></td>
+                          <td class="diff-indicator" title="runtime value"><i class="ph-bold ph-clock-counter-clockwise diff-mod"></i></td>
                           <template x-for="col in columns" :key="'rt-'+col">
                             <td :class="{'diff-cell': getRowDiff(row)?.changed_cols?.includes(col)}">
                               <span class="cell-value" x-text="getRowDiff(row).runtime[col] ?? ''"></span>
@@ -345,7 +347,7 @@
                     <!-- Runtime-only rows (deleted from memory) -->
                     <template x-for="(diff, key) in rowDiffs" :key="'del-'+key">
                       <tr class="diff-row-deleted" x-show="showDiffs && diff.deletedFromMemory">
-                        <td class="diff-indicator"><span class="diff-del">−</span></td>
+                        <td class="diff-indicator" title="only in runtime — deleted from memory"><i class="ph-bold ph-minus-circle diff-del"></i></td>
                         <template x-for="col in columns" :key="'del-'+col">
                           <td><span class="cell-value" x-text="diff.runtime?.[col] ?? ''"></span></td>
                         </template>
