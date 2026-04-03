@@ -715,6 +715,22 @@ a {
   font-style: italic;
 }
 
+.diff-indicator,
+.diff-indicator-th {
+  width: 1.2rem;
+  min-width: 1.2rem;
+  max-width: 1.2rem;
+  text-align: center;
+  padding: 0 !important;
+  font-weight: 700;
+  font-size: var(--fs-base);
+  font-family: monospace;
+}
+
+.diff-add  { color: var(--pico-ins-color); }
+.diff-del  { color: var(--pico-del-color); }
+.diff-mod  { color: var(--pico-primary); }
+
 .row-pending-delete > td {
   text-decoration: line-through;
   opacity: 0.4;
