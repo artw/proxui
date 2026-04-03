@@ -354,7 +354,12 @@
       <!-- Unsaved changes bottom bar -->
       <div class="config-bottom" x-show="configModules.some(m => !m.in_sync && !m.error)">
         <div class="config-bar">
-          <span class="config-bar-label"><i class="ph-bold ph-warning"></i> Unapplied changes</span>
+          <span class="config-bar-label" x-show="configModules.some(m => !m.error && !m.memory_eq_runtime)">
+            <i class="ph-bold ph-warning"></i> Unapplied changes
+          </span>
+          <span class="config-bar-label unsaved-label" x-show="!configModules.some(m => !m.error && !m.memory_eq_runtime) && configModules.some(m => !m.error && !m.memory_eq_disk)">
+            <i class="ph-bold ph-floppy-disk"></i> Unsaved to disk
+          </span>
           <template x-for="g in unsyncedGroups" :key="g.label">
             <div class="config-group">
               <template x-for="m in g.modules" :key="m.module">

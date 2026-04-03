@@ -453,6 +453,10 @@ a {
   white-space: nowrap;
 }
 
+.config-bar-label.unsaved-label {
+  color: var(--pico-muted-color);
+}
+
 .sync-actions {
   display: flex;
   gap: 0.3rem;
