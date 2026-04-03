@@ -483,6 +483,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD MYSQL SERVERS TO RUNTIME",
         "save_disk":    "SAVE MYSQL SERVERS TO DISK",
         "load_disk":    "LOAD MYSQL SERVERS FROM DISK",
+        "discard":      "SAVE MYSQL SERVERS FROM RUNTIME",
     },
     "mysql_users":      {
         "memory": ["mysql_users"],
@@ -491,6 +492,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD MYSQL USERS TO RUNTIME",
         "save_disk":    "SAVE MYSQL USERS TO DISK",
         "load_disk":    "LOAD MYSQL USERS FROM DISK",
+        "discard":      "SAVE MYSQL USERS FROM RUNTIME",
     },
     "mysql_query_rules": {
         "memory": ["mysql_query_rules"],
@@ -499,6 +501,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD MYSQL QUERY RULES TO RUNTIME",
         "save_disk":    "SAVE MYSQL QUERY RULES TO DISK",
         "load_disk":    "LOAD MYSQL QUERY RULES FROM DISK",
+        "discard":      "SAVE MYSQL QUERY RULES FROM RUNTIME",
     },
     "mysql_variables":  {
         "memory": ["global_variables"],
@@ -507,6 +510,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD MYSQL VARIABLES TO RUNTIME",
         "save_disk":    "SAVE MYSQL VARIABLES TO DISK",
         "load_disk":    "LOAD MYSQL VARIABLES FROM DISK",
+        "discard":      "SAVE MYSQL VARIABLES FROM RUNTIME",
     },
     "admin_variables":  {
         "memory": ["global_variables"],
@@ -515,6 +519,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD ADMIN VARIABLES TO RUNTIME",
         "save_disk":    "SAVE ADMIN VARIABLES TO DISK",
         "load_disk":    "LOAD ADMIN VARIABLES FROM DISK",
+        "discard":      "SAVE ADMIN VARIABLES FROM RUNTIME",
     },
     "pgsql_servers":    {
         "memory": ["pgsql_servers"],
@@ -523,6 +528,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD PGSQL SERVERS TO RUNTIME",
         "save_disk":    "SAVE PGSQL SERVERS TO DISK",
         "load_disk":    "LOAD PGSQL SERVERS FROM DISK",
+        "discard":      "SAVE PGSQL SERVERS FROM RUNTIME",
     },
     "pgsql_users":      {
         "memory": ["pgsql_users"],
@@ -531,6 +537,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD PGSQL USERS TO RUNTIME",
         "save_disk":    "SAVE PGSQL USERS TO DISK",
         "load_disk":    "LOAD PGSQL USERS FROM DISK",
+        "discard":      "SAVE PGSQL USERS FROM RUNTIME",
     },
     "pgsql_query_rules": {
         "memory": ["pgsql_query_rules"],
@@ -539,6 +546,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD PGSQL QUERY RULES TO RUNTIME",
         "save_disk":    "SAVE PGSQL QUERY RULES TO DISK",
         "load_disk":    "LOAD PGSQL QUERY RULES FROM DISK",
+        "discard":      "SAVE PGSQL QUERY RULES FROM RUNTIME",
     },
     "proxysql_servers": {
         "memory": ["proxysql_servers"],
@@ -547,6 +555,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD PROXYSQL SERVERS TO RUNTIME",
         "save_disk":    "SAVE PROXYSQL SERVERS TO DISK",
         "load_disk":    "LOAD PROXYSQL SERVERS FROM DISK",
+        "discard":      "SAVE PROXYSQL SERVERS FROM RUNTIME",
     },
     "scheduler":        {
         "memory": ["scheduler"],
@@ -555,6 +564,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD SCHEDULER TO RUNTIME",
         "save_disk":    "SAVE SCHEDULER TO DISK",
         "load_disk":    "LOAD SCHEDULER FROM DISK",
+        "discard":      "SAVE SCHEDULER FROM RUNTIME",
     },
     "clickhouse_users": {
         "memory": ["clickhouse_users"],
@@ -563,6 +573,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD CLICKHOUSE USERS TO RUNTIME",
         "save_disk":    "SAVE CLICKHOUSE USERS TO DISK",
         "load_disk":    "LOAD CLICKHOUSE USERS FROM DISK",
+        "discard":      "SAVE CLICKHOUSE USERS FROM RUNTIME",
     },
     "clickhouse_variables": {
         "memory": ["global_variables"],
@@ -571,6 +582,7 @@ CONFIG_MODULES = {
         "load_runtime": "LOAD CLICKHOUSE VARIABLES TO RUNTIME",
         "save_disk":    "SAVE CLICKHOUSE VARIABLES TO DISK",
         "load_disk":    "LOAD CLICKHOUSE VARIABLES FROM DISK",
+        "discard":      "SAVE CLICKHOUSE VARIABLES FROM RUNTIME",
     },
 }
 
@@ -611,7 +623,7 @@ async def config_status(request: Request):
 
 class ConfigAction(BaseModel):
     module: str
-    action: str   # "load_runtime", "save_disk", "load_disk"
+    action: str   # "load_runtime", "save_disk", "load_disk", "discard"
 
 
 @app.post("/api/v1/config/action")
@@ -620,7 +632,7 @@ async def config_action(req: ConfigAction, request: Request):
     if req.module not in CONFIG_MODULES:
         return {"ok": False, "error": f"Unknown module: {req.module}"}
     mod = CONFIG_MODULES[req.module]
-    if req.action not in ("load_runtime", "save_disk", "load_disk"):
+    if req.action not in ("load_runtime", "save_disk", "load_disk", "discard"):
         return {"ok": False, "error": f"Unknown action: {req.action}"}
     cmd = mod[req.action]
     from .db import get_pool

@@ -232,9 +232,9 @@
                               @click="configAction(moduleForTable(currentTable), 'save_disk')">
                         <i class="ph-bold ph-floppy-disk"></i> Save</button>
                       <button class="outline"
-                              :disabled="!isDiskDirty(moduleForTable(currentTable))"
-                              @click="configAction(moduleForTable(currentTable), 'load_disk')">
-                        <i class="ph-bold ph-arrow-counter-clockwise"></i> Reset</button>
+                              :disabled="!isUnsaved(moduleForTable(currentTable))"
+                              @click="configAction(moduleForTable(currentTable), 'discard')">
+                        <i class="ph-bold ph-arrow-counter-clockwise"></i> Discard</button>
                     </div>
                   </template>
                 </div>
