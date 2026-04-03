@@ -7,7 +7,7 @@ FastAPI connecting to ProxySQL's admin port via MySQL protocol.
 
 ```
 ┌──────────────┐       ┌────────────────┐       ┌────────────────┐
-│   Browser    │──────▶│  proxui :8080  │──────▶│ ProxySQL :6032 │
+│   Browser    │─────▶│  proxui :8080  │─────▶│ ProxySQL :6032 │
 │   Web UI /   │  REST │  FastAPI       │ MySQL │ admin iface    │
 └──────────────┘       └────────────────┘       └────────────────┘
                                                        │
