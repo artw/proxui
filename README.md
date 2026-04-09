@@ -100,8 +100,13 @@ servers, and credentials are auto-discovered from ProxySQL state.
 | `models.py` | Pydantic models (read + create/update per writable table) |
 | `crud_router.py` | FastAPI router (CRUD for config, GET-only for runtime/stats) |
 | `table_metadata.py` | Column metadata dict for UI introspection |
-| `db.py` | aiomysql connection pool with per-session support |
-| `app.py` | FastAPI app: auth, config sync, query engine, schema browser |
+
+Hand-crafted files in `generated/` (excluded from codegen via `--skip`):
+
+| File | Contents |
+|------|----------|
+| `app.py` | FastAPI app: auth, sessions, config sync, query engine, schema browser |
+| `db.py` | Per-session aiomysql connection pools, error handling |
 
 Config tables get full CRUD. Runtime/stats are read-only.
 Composite PKs become path params (`/mysql_servers/{hg}/{host}/{port}`).
@@ -132,12 +137,12 @@ proxui/
 │   ├── app.js                  # ~1350 lines
 │   ├── app.css                 # ~870 lines
 │   └── icons/                  # MySQL/PostgreSQL SVG logos
-├── generated/                  # auto-generated — do not edit
-│   ├── app.py                  # FastAPI app (~1000 lines)
-│   ├── crud_router.py          # ~2400 routes
-│   ├── db.py                   # connection pool
-│   ├── models.py               # ~2300 Pydantic models
-│   └── table_metadata.py       # ~2100 table defs
+├── generated/
+│   ├── app.py                  # HAND-CRAFTED — auth, sessions, config sync, query engine
+│   ├── db.py                   # HAND-CRAFTED — per-session aiomysql pools, error handling
+│   ├── crud_router.py          # generated — ~2400 routes
+│   ├── models.py               # generated — ~2300 Pydantic models
+│   └── table_metadata.py       # generated — ~2100 table defs
 └── test/
     ├── bench.sh                # podman test bench
     ├── proxysql.cnf
