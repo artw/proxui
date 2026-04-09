@@ -22,9 +22,9 @@ connects via MySQL protocol to ProxySQL's admin port.
 ## Quick start
 
 ```bash
-make                  # venv + deps + generate code from C header
-make test-up          # MySQL + PostgreSQL + ProxySQL in podman
-make test-run         # build + run proxui container on same network
+just all              # venv + deps + generate code from C header
+just bench-up         # MySQL + PostgreSQL + ProxySQL in podman
+just bench-run        # build + run proxui container on same network
 # http://localhost:8080       → web UI (login with radmin/radmin)
 # http://localhost:8080/api/docs → Swagger
 ```
@@ -125,7 +125,7 @@ Tables not present in the running instance are filtered at runtime.
 proxui/
 ├── gen_fastapi_models.py       # code generator
 ├── Containerfile               # podman image
-├── Makefile                    # build / run / test
+├── justfile                    # build / run / test
 ├── requirements.txt
 ├── ui/                         # web UI (hand-crafted)
 │   ├── index.html              # Alpine.js SPA
@@ -144,20 +144,23 @@ proxui/
     └── smoke_test.sh           # 23-point test suite
 ```
 
-## Makefile targets
+## Recipes (`just --list`)
 
-| Target | Description |
+| Recipe | Description |
 |--------|-------------|
-| `make` | Set up venv + deps + codegen |
-| `make run` | Start server (`HOST:PORT`, default `127.0.0.1:8080`) |
-| `make dev` | Start with `--reload` |
-| `make generate` | Regenerate from C header |
-| `make test-up` | Start MySQL + PostgreSQL + ProxySQL containers |
-| `make test-run` | Build + start bench + run proxui in container |
-| `make test-down` | Stop and remove all containers |
-| `make test-status` | Show container status |
-| `make test-logs` | Tail proxui container logs |
-| `make clean` | Remove venv and pycache |
+| `just all` | Set up venv + deps + codegen |
+| `just run` | Start server (`HOST:PORT`, default `127.0.0.1:8080`) |
+| `just dev` | Start with `--reload` |
+| `just generate` | Regenerate from C header |
+| `just bench-up [VERSION]` | Start MySQL + ProxySQL containers (2.7 or 3.0) |
+| `just bench-run` | Build + start proxui container on bench network |
+| `just bench-down` | Stop and remove all containers |
+| `just bench-status` | Show container status |
+| `just bench-logs [CT]` | Tail container logs |
+| `just smoke [URL]` | Run smoke test against live proxui |
+| `just integ` | Integration tests against all supported versions |
+| `just integ-version VERSION` | Integration test for a single version |
+| `just clean` | Remove venv and pycache |
 
 ## Environment variables
 
@@ -205,7 +208,7 @@ Auto-detects distrobox and uses `distrobox-host-exec podman`.
 
 ```bash
 cd ~/src/proxysql && git pull
-cd ~/sync/code/proxui && make generate
+cd ~/sync/code/proxui && just generate
 ```
 
 Overwrites `generated/`. Never hand-edit those files.

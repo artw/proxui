@@ -47,11 +47,21 @@ async def get_admin_conn(request: Request):
 
 
 async def execute_query(conn, sql: str, params: list | None = None) -> list[dict[str, Any]]:
-    """Execute a SELECT and return rows as list of dicts."""
-    async with conn.cursor(aiomysql.DictCursor) as cur:
-        await cur.execute(sql, params)
-        rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+    """Execute a SELECT and return rows as list of dicts.
+
+    Returns an empty list if the table doesn't exist in this ProxySQL version
+    (e.g. pgsql_* tables on a 2.7.x instance).
+    """
+    try:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        msg = str(e)
+        if "no such table" in msg or "Table doesn't exist" in msg:
+            return []
+        raise
 
 
 async def execute_modify(conn, sql: str, params: list | None = None) -> int:

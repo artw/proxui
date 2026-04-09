@@ -1,5 +1,8 @@
 #!/bin/bash
 # proxui test bench — MySQL + PostgreSQL + ProxySQL + proxui in podman
+# Usage: bench.sh {up [VERSION]|run|down|logs [ct]|status}
+#        VERSION: 2.7 or 3.0 (default 3.0)
+#        env PROXYSQL_VERSION overrides default; arg overrides env
 set -euo pipefail
 
 # Use host-exec if inside distrobox
@@ -18,6 +21,20 @@ CONFDIR="$(cd "$(dirname "$0")" && pwd)"
 PROJDIR="$(cd "$CONFDIR/.." && pwd)"
 
 up() {
+    local version="${1:-${PROXYSQL_VERSION:-3.0}}"
+    local fixture_dir="$CONFDIR/fixtures/v${version}"
+
+    # Map version shorthand to exact Docker Hub image tag and feature flags.
+    # Update the image tag when a new latest patch is published.
+    local image has_pgsql
+    case "$version" in
+        2.7) image="docker.io/proxysql/proxysql:2.7.3"; has_pgsql=0 ;;
+        3.0) image="docker.io/proxysql/proxysql:3.0";   has_pgsql=1 ;;
+        *) echo "Unsupported version: $version (supported: 2.7, 3.0)"; exit 1 ;;
+    esac
+
+    echo "Starting ProxySQL $version bench (pgsql: $( [ "$has_pgsql" = 1 ] && echo yes || echo no ))"
+
     $PODMAN network exists "$NETWORK" 2>/dev/null || $PODMAN network create "$NETWORK"
 
     # ── MySQL backend ──
@@ -40,37 +57,38 @@ up() {
     done
     echo " ready"
 
-    # ── PostgreSQL backend ──
-    if ! $PODMAN container exists "$PGSQL_CT" 2>/dev/null; then
-        $PODMAN run -d --name "$PGSQL_CT" --network "$NETWORK" \
-            -e POSTGRES_DB=testdb \
-            -e POSTGRES_USER=testuser \
-            -e POSTGRES_PASSWORD=testpass \
-            -p 15432:5432 \
-            docker.io/postgres:17
-    else
-        $PODMAN start "$PGSQL_CT" 2>/dev/null || true
+    # ── PostgreSQL backend (3.0 only) ──
+    if [ "$has_pgsql" = 1 ]; then
+        if ! $PODMAN container exists "$PGSQL_CT" 2>/dev/null; then
+            $PODMAN run -d --name "$PGSQL_CT" --network "$NETWORK" \
+                -e POSTGRES_DB=testdb \
+                -e POSTGRES_USER=testuser \
+                -e POSTGRES_PASSWORD=testpass \
+                -p 15432:5432 \
+                docker.io/postgres:17
+        else
+            $PODMAN start "$PGSQL_CT" 2>/dev/null || true
+        fi
+
+        printf "Waiting for PostgreSQL"
+        for i in $(seq 1 30); do
+            $PODMAN exec "$PGSQL_CT" pg_isready -U testuser -d testdb >/dev/null 2>&1 && break
+            printf '.'; sleep 1
+        done
+        echo " ready"
+
+        $PODMAN exec "$PGSQL_CT" psql -U testuser -d testdb -c "
+            CREATE TABLE IF NOT EXISTS sample_data (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                value DOUBLE PRECISION DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            INSERT INTO sample_data (name, value) VALUES
+                ('alpha', 1.1), ('beta', 2.2), ('gamma', 3.3)
+            ON CONFLICT DO NOTHING;
+        " >/dev/null 2>&1 || true
     fi
-
-    printf "Waiting for PostgreSQL"
-    for i in $(seq 1 30); do
-        $PODMAN exec "$PGSQL_CT" pg_isready -U testuser -d testdb >/dev/null 2>&1 && break
-        printf '.'; sleep 1
-    done
-    echo " ready"
-
-    # Seed a sample table in PostgreSQL
-    $PODMAN exec "$PGSQL_CT" psql -U testuser -d testdb -c "
-        CREATE TABLE IF NOT EXISTS sample_data (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            value DOUBLE PRECISION DEFAULT 0,
-            created_at TIMESTAMP DEFAULT NOW()
-        );
-        INSERT INTO sample_data (name, value) VALUES
-            ('alpha', 1.1), ('beta', 2.2), ('gamma', 3.3)
-        ON CONFLICT DO NOTHING;
-    " >/dev/null 2>&1 || true
 
     # ── ProxySQL ──
     if ! $PODMAN container exists "$PROXY_CT" 2>/dev/null; then
@@ -79,44 +97,54 @@ up() {
             -p 16032:6032 \
             -p 16033:6033 \
             -p 16070:6070 \
-            docker.io/proxysql/proxysql:3.0
+            "$image"
     else
         $PODMAN start "$PROXY_CT" 2>/dev/null || true
     fi
 
+    # admin:admin is the bootstrap credential (always valid, set in cnf)
     printf "Waiting for ProxySQL"
-    for i in $(seq 1 30); do
+    for i in $(seq 1 60); do
         $PODMAN exec "$PROXY_CT" \
-            mysql -h127.0.0.1 -P6032 -uradmin -padmin -e "SELECT 1" >/dev/null 2>&1 && break
+            mysql -h127.0.0.1 -P6032 -uadmin -padmin -e "SELECT 1" >/dev/null 2>&1 && break
         printf '.'; sleep 1
     done
     echo " ready"
 
-    # Configure ProxySQL: admin creds, MySQL + PgSQL backends and users
+    # ── Ensure admin credentials are active at runtime ──
+    # ProxySQL may not apply cnf admin_credentials without an explicit LOAD.
+    # Use admin:admin (bootstrap) to set radmin:radmin and load to runtime.
     $PODMAN exec "$PROXY_CT" mysql -h127.0.0.1 -P6032 -uadmin -padmin -e "
         SET admin-admin_credentials='admin:admin;radmin:radmin';
         LOAD ADMIN VARIABLES TO RUNTIME;
         SAVE ADMIN VARIABLES TO DISK;
-
-        REPLACE INTO mysql_servers (hostgroup_id, hostname, port) VALUES (0, 'proxui-mysql', 3306);
-        REPLACE INTO mysql_users (username, password, default_hostgroup) VALUES ('testuser', 'testpass', 0);
-        LOAD MYSQL SERVERS TO RUNTIME;
-        LOAD MYSQL USERS TO RUNTIME;
-        SAVE MYSQL SERVERS TO DISK;
-        SAVE MYSQL USERS TO DISK;
-
-        REPLACE INTO pgsql_servers (hostgroup_id, hostname, port) VALUES (0, 'proxui-pgsql', 5432);
-        REPLACE INTO pgsql_users (username, password, default_hostgroup) VALUES ('testuser', 'testpass', 0);
-        LOAD PGSQL SERVERS TO RUNTIME;
-        LOAD PGSQL USERS TO RUNTIME;
-        SAVE PGSQL SERVERS TO DISK;
-        SAVE PGSQL USERS TO DISK;
     "
 
+    # ── Seed pgsql backends (3.0 only) ──
+    if [ "$has_pgsql" = 1 ]; then
+        $PODMAN exec "$PROXY_CT" mysql -h127.0.0.1 -P6032 -uadmin -padmin -e "
+            REPLACE INTO pgsql_servers (hostgroup_id, hostname, port) VALUES (0, 'proxui-pgsql', 5432);
+            REPLACE INTO pgsql_users (username, password, default_hostgroup) VALUES ('testuser', 'testpass', 0);
+            LOAD PGSQL SERVERS TO RUNTIME;
+            LOAD PGSQL USERS TO RUNTIME;
+            SAVE PGSQL SERVERS TO DISK;
+            SAVE PGSQL USERS TO DISK;
+        "
+    fi
+
+    # ── Seed fixtures ──
+    if [ -f "$fixture_dir/seed.sql" ]; then
+        echo "Seeding fixtures from $fixture_dir/seed.sql ..."
+        $PODMAN exec -i "$PROXY_CT" mysql -h127.0.0.1 -P6032 -uadmin -padmin \
+            < "$fixture_dir/seed.sql"
+    fi
+
     echo ""
-    echo "ProxySQL admin:    localhost:16032  (radmin/radmin)"
-    echo "MySQL backend:     localhost:13306  (testuser/testpass)"
-    echo "PostgreSQL backend: localhost:15432  (testuser/testpass)"
+    echo "ProxySQL $version admin: localhost:16032  (radmin/radmin)"
+    echo "MySQL backend:           localhost:13306  (testuser/testpass)"
+    [ "$has_pgsql" = 1 ] && \
+    echo "PostgreSQL backend:      localhost:15432  (testuser/testpass)"
+    true
 }
 
 run() {
@@ -142,8 +170,8 @@ run() {
     echo " ready"
 
     echo ""
-    echo "proxui UI:      http://localhost:8080"
-    echo "proxui API:     http://localhost:8080/api/docs"
+    echo "proxui UI:   http://localhost:8080"
+    echo "proxui API:  http://localhost:8080/api/docs"
 }
 
 down() {
@@ -161,10 +189,10 @@ status() {
 }
 
 case "${1:-up}" in
-    up)     up ;;
+    up)     up "${2:-}" ;;
     run)    run ;;
     down)   down ;;
     logs)   logs "${2:-}" ;;
     status) status ;;
-    *)      echo "Usage: $0 {up|run|down|logs [container]|status}"; exit 1 ;;
+    *)      echo "Usage: $0 {up [VERSION]|run|down|logs [container]|status}"; exit 1 ;;
 esac

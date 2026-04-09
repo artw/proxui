@@ -1389,6 +1389,36 @@ class MysqlServersSslParamsCreate(BaseModel):
     comment: Optional[str] = Field(default='')
 
 
+class PgsqlServersSslParams(BaseModel):
+    """Read model for table `pgsql_servers_ssl_params`."""
+
+    hostname: str
+    port: int = Field(default=5432, description="CHECK: port >= 0 AND port <= 65535")
+    username: str = Field(default='')
+    ssl_ca: str = Field(default='')
+    ssl_cert: str = Field(default='')
+    ssl_key: str = Field(default='')
+    ssl_crl: str = Field(default='')
+    ssl_crlpath: str = Field(default='')
+    ssl_protocol_version_range: str = Field(default='')
+    comment: str = Field(default='')
+
+
+class PgsqlServersSslParamsCreate(BaseModel):
+    """Create/update model for `pgsql_servers_ssl_params`."""
+
+    hostname: str
+    port: Optional[int] = Field(default=5432, description="CHECK: port >= 0 AND port <= 65535")
+    username: Optional[str] = Field(default='')
+    ssl_ca: Optional[str] = Field(default='')
+    ssl_cert: Optional[str] = Field(default='')
+    ssl_key: Optional[str] = Field(default='')
+    ssl_crl: Optional[str] = Field(default='')
+    ssl_crlpath: Optional[str] = Field(default='')
+    ssl_protocol_version_range: Optional[str] = Field(default='')
+    comment: Optional[str] = Field(default='')
+
+
 class RuntimeClickhouseUsers(BaseModel):
     """Read model for table `runtime_clickhouse_users`."""
 
@@ -2066,6 +2096,21 @@ class RuntimeMysqlServersSslParams(BaseModel):
     ssl_crlpath: str = Field(default='')
     ssl_cipher: str = Field(default='')
     tls_version: str = Field(default='')
+    comment: str = Field(default='')
+
+
+class RuntimePgsqlServersSslParams(BaseModel):
+    """Read model for table `runtime_pgsql_servers_ssl_params`."""
+
+    hostname: str
+    port: int = Field(default=5432, description="CHECK: port >= 0 AND port <= 65535")
+    username: str = Field(default='')
+    ssl_ca: str = Field(default='')
+    ssl_cert: str = Field(default='')
+    ssl_key: str = Field(default='')
+    ssl_crl: str = Field(default='')
+    ssl_crlpath: str = Field(default='')
+    ssl_protocol_version_range: str = Field(default='')
     comment: str = Field(default='')
 
 

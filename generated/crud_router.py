@@ -107,6 +107,8 @@ from .models import (
     StatsProxysqlServersStatus,
     MysqlServersSslParams,
     MysqlServersSslParamsCreate,
+    PgsqlServersSslParams,
+    PgsqlServersSslParamsCreate,
     RuntimeClickhouseUsers,
     RuntimeProxysqlServers,
     StatsMysqlQueryEvents,
@@ -154,6 +156,7 @@ from .models import (
     RuntimeMysqlGaleraHostgroups,
     StatsProxysqlServersClientsStatus,
     RuntimeMysqlServersSslParams,
+    RuntimePgsqlServersSslParams,
     MysqlGroupReplicationHostgroups,
     MysqlGroupReplicationHostgroupsCreate,
     RuntimeMysqlHostgroupAttributes,
@@ -1559,6 +1562,53 @@ async def update_mysql_servers_ssl_params(hostname: str, port: str, username: st
     return {"status": "ok"}
 
 
+@router.get("/pgsql_servers_ssl_params", response_model=list[PgsqlServersSslParams], tags=["pgsql"])
+async def list_pgsql_servers_ssl_params(conn=Depends(get_admin_conn)):
+    """List all rows from `pgsql_servers_ssl_params`."""
+    return await execute_query(conn, "SELECT * FROM pgsql_servers_ssl_params")
+
+
+@router.post("/pgsql_servers_ssl_params", response_model=dict[str, str], tags=["pgsql"])
+async def create_pgsql_servers_ssl_params(item: PgsqlServersSslParamsCreate, conn=Depends(get_admin_conn)):
+    """Insert a row into `pgsql_servers_ssl_params`."""
+    data = item.model_dump(exclude_none=True)
+    cols = ', '.join(data.keys())
+    placeholders = ', '.join(['%s'] * len(data))
+    sql = f"INSERT INTO pgsql_servers_ssl_params ({cols}) VALUES ({placeholders})"
+    await execute_modify(conn, sql, list(data.values()))
+    return {"status": "ok"}
+
+
+@router.get("/pgsql_servers_ssl_params/{hostname}/{port}/{username}", response_model=PgsqlServersSslParams, tags=["pgsql"])
+async def get_pgsql_servers_ssl_params(hostname: str, port: str, username: str, conn=Depends(get_admin_conn)):
+    """Get a single row from `pgsql_servers_ssl_params` by primary key."""
+    rows = await execute_query(conn, "SELECT * FROM pgsql_servers_ssl_params WHERE hostname = %s AND port = %s AND username = %s", [hostname, port, username])
+    if not rows:
+        raise HTTPException(status_code=404, detail="Not found")
+    return rows[0]
+
+
+@router.delete("/pgsql_servers_ssl_params/{hostname}/{port}/{username}", response_model=dict[str, str], tags=["pgsql"])
+async def delete_pgsql_servers_ssl_params(hostname: str, port: str, username: str, conn=Depends(get_admin_conn)):
+    """Delete a row from `pgsql_servers_ssl_params` by primary key."""
+    await execute_modify(conn, "DELETE FROM pgsql_servers_ssl_params WHERE hostname = %s AND port = %s AND username = %s", [hostname, port, username])
+    return {"status": "ok"}
+
+
+@router.put("/pgsql_servers_ssl_params/{hostname}/{port}/{username}", response_model=dict[str, str], tags=["pgsql"])
+async def update_pgsql_servers_ssl_params(hostname: str, port: str, username: str, item: PgsqlServersSslParamsCreate, conn=Depends(get_admin_conn)):
+    """Update (REPLACE) a row in `pgsql_servers_ssl_params`."""
+    data = item.model_dump(exclude_none=True)
+    data["hostname"] = hostname
+    data["port"] = port
+    data["username"] = username
+    cols = ', '.join(data.keys())
+    placeholders = ', '.join(['%s'] * len(data))
+    sql = f"REPLACE INTO pgsql_servers_ssl_params ({cols}) VALUES ({placeholders})"
+    await execute_modify(conn, sql, list(data.values()))
+    return {"status": "ok"}
+
+
 @router.get("/runtime_clickhouse_users", response_model=list[RuntimeClickhouseUsers], tags=["runtime"])
 async def list_runtime_clickhouse_users(conn=Depends(get_admin_conn)):
     """List all rows from `runtime_clickhouse_users`."""
@@ -2216,6 +2266,12 @@ async def list_stats_proxysql_servers_clients_status(conn=Depends(get_admin_conn
 async def list_runtime_mysql_servers_ssl_params(conn=Depends(get_admin_conn)):
     """List all rows from `runtime_mysql_servers_ssl_params`."""
     return await execute_query(conn, "SELECT * FROM runtime_mysql_servers_ssl_params")
+
+
+@router.get("/runtime_pgsql_servers_ssl_params", response_model=list[RuntimePgsqlServersSslParams], tags=["runtime"])
+async def list_runtime_pgsql_servers_ssl_params(conn=Depends(get_admin_conn)):
+    """List all rows from `runtime_pgsql_servers_ssl_params`."""
+    return await execute_query(conn, "SELECT * FROM runtime_pgsql_servers_ssl_params")
 
 
 @router.get("/mysql_group_replication_hostgroups", response_model=list[MysqlGroupReplicationHostgroups], tags=["mysql"])

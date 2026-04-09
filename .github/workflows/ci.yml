@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  # ── validate codegen ─────────────────────────────────────────────────────────
+  # Runs gen_fastapi_models.py and checks that the committed generated files
+  # (models.py, crud_router.py, table_metadata.py) are up to date.
+  # app.py and db.py are hand-crafted and excluded from codegen (--skip).
+  codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Clone ProxySQL source (sparse, latest tag)
+        run: |
+          git clone --filter=blob:none --sparse \
+            https://github.com/sysown/proxysql.git /tmp/proxysql
+          cd /tmp/proxysql
+          git sparse-checkout set include
+          # Check out latest stable tag (3.x)
+          latest=$(git tag --sort=-version:refname | grep -E '^v3\.' | head -1)
+          echo "Using ProxySQL $latest"
+          git checkout "$latest"
+
+      - name: Run codegen
+        run: |
+          python gen_fastapi_models.py \
+            --header /tmp/proxysql/include/ProxySQL_Admin_Tables_Definitions.h \
+            --outdir generated \
+            --skip app.py db.py
+
+      - name: Check for uncommitted changes in generated files
+        run: |
+          git diff --exit-code generated/models.py generated/crud_router.py generated/table_metadata.py
+          echo "Generated files are up to date."
+
+  # ── integration tests ────────────────────────────────────────────────────────
+  # Disabled — requires pulling ProxySQL container images (2.7.3, 3.0) and
+  # running podman with a test network. Too slow and heavy for GitHub-hosted runners.
+  # Run locally with: just integ
+  #
+  # integration:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install podman + mysql client
+  #       run: |
+  #         sudo apt-get update -q
+  #         sudo apt-get install -y -q podman mysql-client
+  #     - name: Install Python deps
+  #       run: pip install -r requirements.txt
+  #     - name: Run integration tests
+  #       run: test/integration_test.sh
+
+  # ── build + push container image ─────────────────────────────────────────────
+  # Triggered only on master push, after codegen check passes.
+  # Requires secrets: QUAY_USERNAME, QUAY_TOKEN (robot account on quay.io/artw).
+  image:
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: [codegen]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" \
+            | sudo podman login quay.io \
+                --username "${{ secrets.QUAY_USERNAME }}" \
+                --password-stdin
+
+      - name: Build and push
+        run: |
+          sudo podman build -t quay.io/artw/proxui:latest -f Containerfile .
+          sudo podman push quay.io/artw/proxui:latest

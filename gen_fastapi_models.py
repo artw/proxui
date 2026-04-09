@@ -1596,7 +1596,15 @@ def main():
         default="webui/generated",
         help="Output directory for generated files",
     )
+    parser.add_argument(
+        "--skip",
+        nargs="*",
+        default=[],
+        metavar="FILE",
+        help="Filenames to skip writing (e.g. app.py db.py for hand-crafted files)",
+    )
     args = parser.parse_args()
+    skip = set(args.skip or [])
 
     header_path = args.header
     if not os.path.exists(header_path):
@@ -1655,12 +1663,18 @@ def main():
     print(f"Wrote {meta_path}")
 
     db_path = outdir / "db.py"
-    db_path.write_text(gen_db_module())
-    print(f"Wrote {db_path}")
+    if "db.py" not in skip:
+        db_path.write_text(gen_db_module())
+        print(f"Wrote {db_path}")
+    else:
+        print(f"Skipped {db_path} (hand-crafted)")
 
     app_path = outdir / "app.py"
-    app_path.write_text(gen_app_main())
-    print(f"Wrote {app_path}")
+    if "app.py" not in skip:
+        app_path.write_text(gen_app_main())
+        print(f"Wrote {app_path}")
+    else:
+        print(f"Skipped {app_path} (hand-crafted)")
 
     print(f"\nDone. Run with:")
     print(f"  pip install fastapi uvicorn aiomysql pydantic")
